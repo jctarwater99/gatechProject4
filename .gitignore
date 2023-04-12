@@ -1,0 +1,16 @@
+CMakeCache.txt
+CMakeFiles/
+Makefile
+cmake_install.cmake
+external/CMakeFiles/
+external/Makefile
+external/cmake_install.cmake
+external/include/CMakeFiles/
+external/include/Makefile
+external/include/cmake_install.cmake
+src/CMakeFiles/
+src/Makefile
+src/cmake_install.cmake
+test/CMakeFiles/
+test/Makefile
+test/cmake_install.cmake
