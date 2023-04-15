@@ -17,6 +17,8 @@ class Master {
 
 	private:
 		/* NOW you can add below, data members and member functions as per the need of your implementation*/
+		MapReduceSpec mr_spec;
+		string state;
 
 };
 
@@ -24,11 +26,16 @@ class Master {
 /* CS6210_TASK: This is all the information your master will get from the framework.
 	You can populate your other class data members here if you want */
 Master::Master(const MapReduceSpec& mr_spec, const std::vector<FileShard>& file_shards) {
-
+	this->state = "INIT"; // INIT, MAPPING, REDUCING, COMPLETE
+	this->mr_spec = mr_spec;
 }
 
 
 /* CS6210_TASK: Here you go. once this function is called you will complete whole map reduce task and return true if succeeded */
 bool Master::run() {
+	// Run map on all shards
+
+	// Run reduce on all reduce "objects"
+
 	return true;
 }

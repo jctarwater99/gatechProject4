@@ -19,6 +19,12 @@ struct MapReduceSpec {
 	string user_id;
 };
 
+struct Worker {
+	string ip;
+	string state; // idle, working, failed
+	string job; // mapping, reducing
+};
+
 
 /* CS6210_TASK: Populate MapReduceSpec data structure with the specification from the config file */
 inline bool read_mr_spec_from_config_file(const std::string& config_filename, MapReduceSpec& mr_spec) {
