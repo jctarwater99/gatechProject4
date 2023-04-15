@@ -7,22 +7,32 @@
 #include <sstream>
 using namespace std;
 
+enum WorkerState {
+	IDLE = 0,
+	WORKING = 1,
+	FAILED = 2,
+};
+enum WorkerJob {
+	NONE = 0,
+	MAP = 1, 
+	REDUCE = 2
+};
+
+struct Worker {
+	string ip;
+	enum WorkerState state = IDLE; 
+	enum WorkerJob job = NONE; 
+};
 
 /* CS6210_TASK: Create your data structure here for storing spec from the config file */
 struct MapReduceSpec {
 	int n_workers;
-	vector<string> worker_ips;
+	vector<struct Worker> workers;
 	vector<string> input_files;
 	string output_dir;
 	int n_output_files; 
 	int map_kilobytes;
 	string user_id;
-};
-
-struct Worker {
-	string ip;
-	string state; // idle, working, failed
-	string job; // mapping, reducing
 };
 
 
@@ -45,7 +55,9 @@ inline bool read_mr_spec_from_config_file(const std::string& config_filename, Ma
 			} else if (key == "worker_ipaddr_ports") {
 				istringstream ss(value);
 				while(getline(ss, sub_value, ',')) {
-					mr_spec.worker_ips.push_back(sub_value);
+					Worker w;
+					w.ip = sub_value;
+					mr_spec.workers.push_back(w);
 				}
 			} else if (key == "input_files")  {
 				istringstream ss(value);
@@ -73,8 +85,8 @@ inline bool read_mr_spec_from_config_file(const std::string& config_filename, Ma
 /* CS6210_TASK: validate the specification read from the config file */
 inline bool validate_mr_spec(const MapReduceSpec& mr_spec) {
 	if ((mr_spec.n_workers == 0) ||
-		(mr_spec.worker_ips.size() != mr_spec.n_workers) ||
-		(mr_spec.worker_ips.size() == 0) ||
+		(mr_spec.workers.size() != mr_spec.n_workers) ||
+		(mr_spec.workers.size() == 0) ||
 		(mr_spec.output_dir == "") ||
 		(mr_spec.n_output_files == 0) ||
 		(mr_spec.map_kilobytes == 0) ||
@@ -82,9 +94,9 @@ inline bool validate_mr_spec(const MapReduceSpec& mr_spec) {
 		return false;
 	}
 
-	for (string s: mr_spec.worker_ips) {
+	for (Worker w: mr_spec.workers) {
 		// Should maybe check that PORT is valid? 
-		if (s == "") {
+		if (w.ip == "") {
 			return false;
 		}
 	} 
