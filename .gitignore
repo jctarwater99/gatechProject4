@@ -14,3 +14,5 @@ src/cmake_install.cmake
 test/CMakeFiles/
 test/Makefile
 test/cmake_install.cmake
+bin*
+.vscode
