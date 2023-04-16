@@ -1,11 +1,26 @@
 #pragma once
 
+#include <grpc++/grpc++.h>
+#include "masterworker.grpc.pb.h"
+
 #include "mapreduce_spec.h"
 #include "file_shard.h"
 
-#include "masterworker.grpc.pb.h"
+
+using namespace std;
+
+using grpc::Server;
+using grpc::ServerAsyncResponseWriter;
+using grpc::ServerBuilder;
+using grpc::ServerCompletionQueue;
+using grpc::ServerContext;
+using grpc::Status;
+using grpc::Channel;
+using grpc::ClientContext;
+using grpc::Status;
 
 using namespace masterworker;
+
 
 typedef enum MasterState {
 	MASTER_STATE_INIT = 0,
@@ -14,6 +29,46 @@ typedef enum MasterState {
 	MASTER_STATE_COMPLETE
 
 } MasterState_t;
+
+
+
+class WorkerServiceClient {
+
+ public:
+	WorkerServiceClient(shared_ptr<Channel>);
+	bool getWorkerStatus( WorkerReply & reply);
+	//bool sendMapCommand(const WorkerCommand & cmd, WorkerReply & reply);
+	//bool sendReduceCommand(const WorkerCommand & cmd, WorkerReply & reply);
+	//bool sendStopWorkerCommand(const WorkerCommand & cmd, WorkerReply & reply);
+
+ private:
+  	unique_ptr<WorkerService::Stub> stub_;
+};
+
+
+
+WorkerServiceClient::WorkerServiceClient(shared_ptr<Channel> channel)
+  : stub_(WorkerService::NewStub(channel))
+  {}
+
+bool WorkerServiceClient::getWorkerStatus( WorkerReply & reply)
+{
+  WorkerCommand wrk_cmd;
+  wrk_cmd.set_cmd_type(CMD_TYPE_STATUS);
+
+  ClientContext context;
+
+  Status status = stub_->executeCommand(&context, wrk_cmd, &reply);
+
+  if (!status.ok()) {
+    std::cout << status.error_code() << ": " << status.error_message()
+              << std::endl;
+    return false;
+  }
+
+  return true;
+}
+
 
 
 
@@ -50,28 +105,63 @@ bool Master::run() {
 	// Run map on all shards
 	// Run reduce on all reduce "objects"
 
+
+	WorkerReply reply;
+
 	while (1) {
+
+		memset(&reply, 0, sizeof(WorkerReply));
+
 		switch (mr_state_) {
 			case MASTER_STATE_INIT:
 			{
+				cout << "Current state: " << mr_state_ << endl;
+
 				// Query all workers about their status to know about available workers
+				cout << "sending getStatus command to workers" << endl;
+				for (Worker w: mr_spec_.workers) {
+            		WorkerServiceClient clientObj( grpc::CreateChannel( w.ip, grpc::InsecureChannelCredentials()));
+					if (clientObj.getWorkerStatus(reply) == true) {
+						cout << "Status Reply: " << reply.DebugString() << endl;
+					} else {
+						cout << "ERROR: getWorkerStatus reply failed for address: " << w.ip << endl;
+					}
+				}
+
+				// Done with this state, move next
+				mr_state_ = MASTER_STATE_MAPPING;
 			}
 			break;
 
 			case MASTER_STATE_MAPPING:
 			{
+				cout << "Current state: " << mr_state_ << endl;
+
 				// Run map on all shards
+
+
+				// Done with this state, move next
+				mr_state_ = MASTER_STATE_REDUCING;
 			}
 			break;
 
 			case MASTER_STATE_REDUCING:
 			{
+				cout << "Current state: " << mr_state_ << endl;
+
 				// Run reduce on all reduce "objects"
+
+				// Done with this state, move next
+				mr_state_ = MASTER_STATE_COMPLETE;
 			}
 			break;
 
 			case MASTER_STATE_COMPLETE:
 			{
+				cout << "Current state: " << mr_state_ << endl;
+
+				// Stop all workers
+
 				// Exit state machine
 				return true;
 			}

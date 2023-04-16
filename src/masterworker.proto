@@ -6,26 +6,28 @@ package masterworker;
 // Enums
 enum WorkStatus
 {
-    WORK_ACCEPTED = 0;
-    WORK_PENDING = 1;
-    WORK_FINISHED = 2;
-    WORK_FAILED = 3;
+    WORK_INVALID = 0;
+    WORK_ACCEPTED = 1;
+    WORK_PENDING = 2;
+    WORK_FINISHED = 3;
+    WORK_FAILED = 4;
 }
 
 enum CommandType
 {
-    CMD_TYPE_MAP = 0;
-    CMD_TYPE_REDUCE = 1;
-    CMD_TYPE_STATUS = 2;
-    CMD_TYPE_STOP_WORKER = 3;
+    CMD_TYPE_INVALID = 0;
+    CMD_TYPE_MAP = 1;
+    CMD_TYPE_REDUCE = 2;
+    CMD_TYPE_STATUS = 3;
+    CMD_TYPE_STOP_WORKER = 4;
 }
 
 enum CommandStatus
 {
-    CMD_STATUS_FAIL = 0;
-    CMD_STATUS_SUCCESS = 1;
-    CMD_STATUS_IN_PROGRESS = 2;
-    CMD_STATUS_INVALID = 3;
+	CMD_STATUS_INVALID = 0;
+    CMD_STATUS_FAIL = 1;
+    CMD_STATUS_SUCCESS = 2;
+    CMD_STATUS_IN_PROGRESS = 3;
 }
 
 
@@ -82,14 +84,16 @@ message ReduceResult
 
 message WorkerCommand
 {
-    CommandType cmd_type = 1;
+	uint32 cmd_seq_num = 1;
+    CommandType cmd_type = 2;
     oneof cmd_body
     {
-        MapCommand map_cmd = 2;
-        ReduceCommand reduce_cmd = 3;
-        StatusCommand status_cmd = 4;
+        MapCommand map_cmd = 3;
+        ReduceCommand reduce_cmd = 4;
+        StatusCommand status_cmd = 5;
     }        
 }
+
 
 message MapCommand
 {
@@ -111,13 +115,14 @@ message StatusCommand
 
 message WorkerReply
 {
-    CommandType cmd_type = 1;
-    CommandStatus cmd_status = 2;
+	uint32 cmd_seq_num = 1;
+    CommandType cmd_type = 2;
+    CommandStatus cmd_status = 3;
     oneof reply_body
     {
-        MapReply map_reply = 3;
-        ReduceReply reduce_reply = 4;
-        StatusReply status_reply = 5;
+        MapReply map_reply = 4;
+        ReduceReply reduce_reply = 5;
+        StatusReply status_reply = 6;
     }
 }
 
@@ -133,15 +138,17 @@ message ReduceReply
 
 message StatusReply
 {
-    WorkStatus status = 1;
-    WorkerCommand cmd = 2;
+	WorkerState worker_state = 1;
+    WorkStatus work_status = 2;
+	WorkerRole worker_role = 3;
+    WorkerCommand cmd = 4;
 }
 
 
 
 //-- Services --
 service WorkerService {
-    rpc assignTask(WorkerCommand) returns (WorkerReply) {}
+    rpc executeCommand(WorkerCommand) returns (WorkerReply) {}
 }
 
 /*
