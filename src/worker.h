@@ -86,6 +86,7 @@ class Worker {
 
 		void handleGetStatusRequest( CallData *msg);
 		void handleMapRequest( CallData *msg);
+		void handleStopWorkerRequest( CallData *msg);
 		// void handleReduceRequest( CallData *msg);
 
 
@@ -210,6 +211,7 @@ bool Worker::run() {
 			case CMD_TYPE_STOP_WORKER:
 			{
 				// Stop worker execution
+				handleStopWorkerRequest( msg);
 				return true;
 			}
 			break;
@@ -256,6 +258,17 @@ void Worker::handleMapRequest( CallData *msg)
 
 	msg->proceed();
 	cout << "CMD_TYPE_STATUS: Sent Reply " << endl;
+}
+
+void Worker::handleStopWorkerRequest( CallData *msg)
+{
+	WorkerCommand *cmd_received = msg->getWorkerCommand();
+	WorkerReply * reply = msg->getWorkerReply();
+	reply->set_cmd_seq_num( cmd_received->cmd_seq_num());
+	reply->set_cmd_type( cmd_received->cmd_type());
+
+	msg->proceed();
+	cout << "CMD_TYPE_STOP_WORKER: Sent Reply " << endl;
 }
 
 
