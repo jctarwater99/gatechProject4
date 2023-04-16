@@ -3,6 +3,19 @@
 #include "mapreduce_spec.h"
 #include "file_shard.h"
 
+#include "masterworker.grpc.pb.h"
+
+using namespace masterworker;
+
+typedef enum MasterState {
+	MASTER_STATE_INIT = 0,
+	MASTER_STATE_MAPPING,
+	MASTER_STATE_REDUCING,
+	MASTER_STATE_COMPLETE
+
+} MasterState_t;
+
+
 
 /* CS6210_TASK: Handle all the bookkeeping that Master is supposed to do.
 	This is probably the biggest task for this project, will test your understanding of map reduce */
@@ -17,8 +30,8 @@ class Master {
 
 	private:
 		/* NOW you can add below, data members and member functions as per the need of your implementation*/
-		MapReduceSpec mr_spec;
-		string state;
+		MapReduceSpec mr_spec_;
+		MasterState_t mr_state_;
 
 };
 
@@ -26,16 +39,49 @@ class Master {
 /* CS6210_TASK: This is all the information your master will get from the framework.
 	You can populate your other class data members here if you want */
 Master::Master(const MapReduceSpec& mr_spec, const std::vector<FileShard>& file_shards) {
-	this->state = "INIT"; // INIT, MAPPING, REDUCING, COMPLETE
-	this->mr_spec = mr_spec;
+	mr_state_ = MASTER_STATE_INIT;
+	mr_spec_ = mr_spec;
 }
 
 
 /* CS6210_TASK: Here you go. once this function is called you will complete whole map reduce task and return true if succeeded */
 bool Master::run() {
+	// Query all workers about their status
 	// Run map on all shards
-
 	// Run reduce on all reduce "objects"
 
-	return true;
+	while (1) {
+		switch (mr_state_) {
+			case MASTER_STATE_INIT:
+			{
+				// Query all workers about their status to know about available workers
+			}
+			break;
+
+			case MASTER_STATE_MAPPING:
+			{
+				// Run map on all shards
+			}
+			break;
+
+			case MASTER_STATE_REDUCING:
+			{
+				// Run reduce on all reduce "objects"
+			}
+			break;
+
+			case MASTER_STATE_COMPLETE:
+			{
+				// Exit state machine
+				return true;
+			}
+			break;
+
+			default:
+				break;
+
+		}
+	}
+
+	return false;
 }

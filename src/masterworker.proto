@@ -17,6 +17,7 @@ enum CommandType
     CMD_TYPE_MAP = 0;
     CMD_TYPE_REDUCE = 1;
     CMD_TYPE_STATUS = 2;
+    CMD_TYPE_STOP_WORKER = 3;
 }
 
 enum CommandStatus
