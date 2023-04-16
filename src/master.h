@@ -54,7 +54,9 @@ WorkerServiceClient::WorkerServiceClient(shared_ptr<Channel> channel)
 bool WorkerServiceClient::getWorkerStatus( WorkerReply & reply)
 {
   WorkerCommand wrk_cmd;
+  wrk_cmd.set_cmd_seq_num(1);	// TODO: keep it hard-coded for now
   wrk_cmd.set_cmd_type(CMD_TYPE_STATUS);
+  wrk_cmd.mutable_status_cmd()->set_dummy(1);
 
   ClientContext context;
 
@@ -105,13 +107,7 @@ bool Master::run() {
 	// Run map on all shards
 	// Run reduce on all reduce "objects"
 
-
-	WorkerReply reply;
-
 	while (1) {
-
-		memset(&reply, 0, sizeof(WorkerReply));
-
 		switch (mr_state_) {
 			case MASTER_STATE_INIT:
 			{
@@ -120,6 +116,7 @@ bool Master::run() {
 				// Query all workers about their status to know about available workers
 				cout << "sending getStatus command to workers" << endl;
 				for (Worker w: mr_spec_.workers) {
+					WorkerReply reply;
             		WorkerServiceClient clientObj( grpc::CreateChannel( w.ip, grpc::InsecureChannelCredentials()));
 					if (clientObj.getWorkerStatus(reply) == true) {
 						cout << "Status Reply: " << reply.DebugString() << endl;

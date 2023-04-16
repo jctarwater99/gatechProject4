@@ -83,6 +83,11 @@ class Worker {
 
 		~Worker();
 
+		void handleGetStatusRequest( CallData *msg);
+		// void handleMapRequest( CallData *msg);
+		// void handleReduceRequest( CallData *msg);
+
+
 	private:
 		/* NOW you can add below, data members and member functions as per the need of your implementation*/
 		WorkerState state_;
@@ -197,21 +202,7 @@ bool Worker::run() {
 
 			case CMD_TYPE_STATUS:
 			{
-				WorkerReply * reply = msg->getWorkerReply();
-				reply->set_cmd_seq_num( cmd_received->cmd_seq_num());
-				reply->set_cmd_type( cmd_received->cmd_type());
-
-				StatusReply *status_reply = reply->mutable_status_reply();
-				status_reply->set_worker_state( state_);
-				status_reply->set_work_status( work_status_);
-				status_reply->set_worker_role( role_);
-
-				cout << "CMD_TYPE_STATUS: Sending Reply " << endl;
-
-				msg->getWorkerResponder()->Finish(*reply, Status::OK, static_cast<void*>(msg));
-
-				// Cleanup memory:
-				delete msg;
+				handleGetStatusRequest( msg);
 			}
 			break;
 
@@ -230,6 +221,24 @@ bool Worker::run() {
 
 	return false;
 }
+
+
+void Worker::handleGetStatusRequest( CallData *msg)
+{
+	WorkerCommand *cmd_received = msg->getWorkerCommand();
+	WorkerReply * reply = msg->getWorkerReply();
+	reply->set_cmd_seq_num( cmd_received->cmd_seq_num());
+	reply->set_cmd_type( cmd_received->cmd_type());
+
+	StatusReply *status_reply = reply->mutable_status_reply();
+	status_reply->set_worker_state( state_);
+	status_reply->set_work_status( work_status_);
+	status_reply->set_worker_role( role_);
+
+	msg->proceed();
+	cout << "CMD_TYPE_STATUS: Sent Reply " << endl;
+}
+
 
 
 // Take in the "service" instance (in this case representing an asynchronous
@@ -252,25 +261,6 @@ void CallData::proceed() {
     } else if (status_ == PROCESS) {
 
         // The actual processing.
-		/*
-        // Query products from vendors:
-        for (int i = 0; i < storeServer_.getVendorIpAddresses().size(); ++i) {
-            // Create VendorClient channel
-            VendorClient clientObj( grpc::CreateChannel( storeServer_.getVendorIpAddresses()[i], grpc::InsecureChannelCredentials()));
-
-            // Query product bid
-            BidReply bidReply;
-            if (clientObj.getProductBid( request_.product_name(), bidReply)) {
-                ProductInfo* pInfo = reply_.add_products();
-                pInfo->set_price( bidReply.price());
-                pInfo->set_vendor_id( bidReply.vendor_id());
-
-            } else {
-                std::cout << "ERROR: getProductBid() FAILED " << std::endl;
-            }
-
-        }
-		*/
 
         // And we are done! Let the gRPC runtime know we've finished, using the
         // memory address of this instance as the uniquely identifying tag for
@@ -279,6 +269,7 @@ void CallData::proceed() {
         responder_.Finish(reply_, Status::OK, this);
 
     } else {
+		cout << "CallData: FINISH call, deleteing myself" << endl;
         GPR_ASSERT(status_ == FINISH);
         // Once in the FINISH state, deallocate ourselves (CallData).
         delete this;
