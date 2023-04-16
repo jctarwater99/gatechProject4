@@ -2,10 +2,132 @@ syntax = "proto3";
 
 package masterworker;
 
-service Worker {
-    rpc assignTask(WorkerTask) returns (WorkerStatus)
+
+// Enums
+enum WorkerStatus
+{
+    ACCEPTED = 0;
+    PENDING = 1;
+    FINISHED = 2;
+    FAILED = 3;
 }
 
+enum CommandType
+{
+    MAP = 0;
+    REDUCE = 1;
+    STATUS = 2;
+}
+
+enum CommandStatus
+{
+    CMD_FAIL = 0;
+    CMD_SUCCESS = 1;
+    CMD_IN_PROGRESS = 2;
+    CMD_INVALID = 3;
+}
+
+
+//-- Sharding related structures --
+message FileSegmentInfo
+{
+    string file_name = 1;
+    uint32 start_line = 2;
+    uint32 end_line = 3;
+}
+
+message FileShardInfo
+{
+    repeated FileSegmentInfo segments = 1;    
+}
+
+
+//-- Mapping related structures --
+message MapResult
+{
+    string file_name = 1;
+}
+
+message MapOutputInfo
+{
+    string mapper_id = 1;
+    repeated MapResult map_result = 2;    
+}
+
+
+//-- Reducing related structures --
+message ReduceResult
+{
+    string reducer_id = 1;
+    string reduce_output_file = 2;
+}
+
+
+//-- Master / Worker interaction structures
+
+message WorkerCommand
+{
+    CommandType cmd_type = 1;
+    oneof cmd_body
+    {
+        MapCommand map_cmd = 2;
+        ReduceCommand reduce_cmd = 3;
+        StatusCommand status_cmd = 4;
+    }        
+}
+
+message MapCommand
+{
+    FileShardInfo shard_info = 1;
+}
+
+message ReduceCommand
+{
+    // Map-output will become input to Reduce stage
+    MapOutputInfo map_output_info = 1;
+}
+
+message StatusCommand
+{
+    // keep placeholder for now
+    uint32 dummy = 1;
+}
+
+
+message WorkerReply
+{
+    CommandType cmd_type = 1;
+    CommandStatus cmd_status = 2;
+    oneof reply_body
+    {
+        MapReply map_reply = 3;
+        ReduceReply reduce_reply = 4;
+        StatusReply status_reply = 5;
+    }
+}
+
+message MapReply
+{
+    MapOutputInfo map_output_info = 1;
+}
+
+message ReduceReply
+{
+    ReduceResult reduce_result = 1;
+}
+
+message StatusReply
+{
+    WorkerStatus status = 1;
+}
+
+
+//-- Services --
+service Worker {
+    rpc assignTask(WorkerCommand) returns (WorkerReply) {}
+}
+
+/*
 message WorkerTask {
     bool task_is_map = 1
     
@@ -16,6 +138,6 @@ message WorkerTask {
                   string output_foler_location
                  } = 3
 }
-message WorkerStatus {
-    string status = 1 // Accepted, pending, finished, failed
-}
+*/
+
+
