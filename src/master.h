@@ -39,10 +39,12 @@ class WorkerServiceClient {
 	bool getWorkerStatus( WorkerReply & reply);
 	//bool sendMapCommand(const WorkerCommand & cmd, WorkerReply & reply);
 	//bool sendReduceCommand(const WorkerCommand & cmd, WorkerReply & reply);
-	//bool sendStopWorkerCommand(const WorkerCommand & cmd, WorkerReply & reply);
+	bool sendStopWorkerCommand(WorkerReply & reply);
 
  private:
   	unique_ptr<WorkerService::Stub> stub_;
+
+	bool executeCommand( WorkerCommand & wrk_cmd, WorkerReply & reply);
 };
 
 
@@ -51,26 +53,42 @@ WorkerServiceClient::WorkerServiceClient(shared_ptr<Channel> channel)
   : stub_(WorkerService::NewStub(channel))
   {}
 
-bool WorkerServiceClient::getWorkerStatus( WorkerReply & reply)
+
+bool WorkerServiceClient::executeCommand( WorkerCommand & wrk_cmd, WorkerReply & reply)
 {
-  WorkerCommand wrk_cmd;
-  wrk_cmd.set_cmd_seq_num(1);	// TODO: keep it hard-coded for now
-  wrk_cmd.set_cmd_type(CMD_TYPE_STATUS);
-  wrk_cmd.mutable_status_cmd()->set_dummy(1);
+	ClientContext context;
 
-  ClientContext context;
+	Status status = stub_->executeCommand(&context, wrk_cmd, &reply);
 
-  Status status = stub_->executeCommand(&context, wrk_cmd, &reply);
+	if (!status.ok()) {
+		std::cout << status.error_code() << ": " << status.error_message()
+				  << std::endl;
+		return false;
+	}
 
-  if (!status.ok()) {
-    std::cout << status.error_code() << ": " << status.error_message()
-              << std::endl;
-    return false;
-  }
-
-  return true;
+	return true;
 }
 
+
+bool WorkerServiceClient::getWorkerStatus( WorkerReply & reply)
+{
+	WorkerCommand wrk_cmd;
+	wrk_cmd.set_cmd_seq_num(1);	// TODO: keep it hard-coded for now
+	wrk_cmd.set_cmd_type(CMD_TYPE_STATUS);
+	wrk_cmd.mutable_status_cmd()->set_dummy(1);
+
+	return executeCommand(wrk_cmd, reply);
+}
+
+
+bool WorkerServiceClient::sendStopWorkerCommand(WorkerReply & reply)
+{
+	WorkerCommand wrk_cmd;
+	wrk_cmd.set_cmd_seq_num(1);	// TODO: keep it hard-coded for now
+	wrk_cmd.set_cmd_type(CMD_TYPE_STOP_WORKER);
+
+	return executeCommand(wrk_cmd, reply);
+}
 
 
 
@@ -158,6 +176,16 @@ bool Master::run() {
 				cout << "Current state: " << mr_state_ << endl;
 
 				// Stop all workers
+				cout << "sending Stop-Worker command:" << endl;
+				for (Worker w: mr_spec_.workers) {
+					WorkerReply reply;
+            		WorkerServiceClient clientObj( grpc::CreateChannel( w.ip, grpc::InsecureChannelCredentials()));
+					if (clientObj.sendStopWorkerCommand(reply) == true) {
+						cout << "Stop-Worker Reply: " << reply.DebugString() << endl;
+					} else {
+						cout << "ERROR: sendStopWorkerCommand reply failed for address: " << w.ip << endl;
+					}
+				}
 
 				// Exit state machine
 				return true;
