@@ -14,7 +14,7 @@ using namespace masterworker;
 
 struct Worker {
 	string ip;
-	WorkerState sate;
+	WorkerState state;
 	WorkerRole role;
 };
 

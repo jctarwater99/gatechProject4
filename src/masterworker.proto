@@ -32,9 +32,10 @@ enum CommandStatus
 
 
 enum WorkerState {
-	STATE_IDLE = 0;
-	STATE_WORKING = 1;
-	STATE_FAILED = 2;
+    STATE_DEFAULT = 0;
+	STATE_IDLE = 1;
+	STATE_WORKING = 2;
+	STATE_FAILED = 3;
 };
 
 

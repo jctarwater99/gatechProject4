@@ -3,6 +3,7 @@
 #include <grpc++/grpc++.h>
 #include <grpc/support/log.h>
 #include <grpcpp/grpcpp.h>
+#include<unistd.h>
 
 #include <mr_task_factory.h>
 #include "mr_tasks.h"
@@ -84,7 +85,7 @@ class Worker {
 		~Worker();
 
 		void handleGetStatusRequest( CallData *msg);
-		// void handleMapRequest( CallData *msg);
+		void handleMapRequest( CallData *msg);
 		// void handleReduceRequest( CallData *msg);
 
 
@@ -190,7 +191,7 @@ bool Worker::run() {
 
 			case CMD_TYPE_MAP:
 			{
-
+				handleMapRequest(msg);
 			}
 			break;
 
@@ -234,11 +235,28 @@ void Worker::handleGetStatusRequest( CallData *msg)
 	status_reply->set_worker_state( state_);
 	status_reply->set_work_status( work_status_);
 	status_reply->set_worker_role( role_);
+	cout << reply->DebugString() << endl;
 
 	msg->proceed();
 	cout << "CMD_TYPE_STATUS: Sent Reply " << endl;
 }
 
+void Worker::handleMapRequest( CallData *msg)
+{
+	WorkerCommand *cmd_received = msg->getWorkerCommand();
+	WorkerReply * reply = msg->getWorkerReply();
+	reply->set_cmd_seq_num( cmd_received->cmd_seq_num());
+	reply->set_cmd_type( cmd_received->cmd_type());
+
+	StatusReply *status_reply = reply->mutable_status_reply();
+	status_reply->set_worker_state( state_);
+	status_reply->set_work_status( work_status_);
+	status_reply->set_worker_role( role_);
+	sleep(1);
+
+	msg->proceed();
+	cout << "CMD_TYPE_STATUS: Sent Reply " << endl;
+}
 
 
 // Take in the "service" instance (in this case representing an asynchronous

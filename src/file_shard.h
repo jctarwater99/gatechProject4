@@ -11,6 +11,7 @@ using namespace masterworker;
      that your master would use for its own bookkeeping and to convey the tasks to the workers for mapping */
 
 struct FileShard {
+     bool mapped;
      vector<struct FileSegment> segments;
 };
 
@@ -43,6 +44,7 @@ inline bool shard_files(const MapReduceSpec& mr_spec, std::vector<FileShard>& fi
                if (shard_size > MAX_SHARD_SIZE) {
                     currSegment.end_line = file_index;
                     currShard.segments.push_back(currSegment);
+                    currShard.mapped = false;
                     FileSegment newSegment;
                     newSegment.filename = filename;
                     newSegment.start_line = file_index;

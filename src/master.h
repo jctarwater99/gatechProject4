@@ -1,8 +1,8 @@
 #pragma once
 
 #include <grpc++/grpc++.h>
+#include<unistd.h>
 #include "masterworker.grpc.pb.h"
-
 #include "mapreduce_spec.h"
 #include "file_shard.h"
 
@@ -37,7 +37,7 @@ class WorkerServiceClient {
  public:
 	WorkerServiceClient(shared_ptr<Channel>);
 	bool getWorkerStatus( WorkerReply & reply);
-	//bool sendMapCommand(const WorkerCommand & cmd, WorkerReply & reply);
+	bool sendMapCommand(FileShard & shard, WorkerReply & reply);
 	//bool sendReduceCommand(const WorkerCommand & cmd, WorkerReply & reply);
 	//bool sendStopWorkerCommand(const WorkerCommand & cmd, WorkerReply & reply);
 
@@ -72,6 +72,34 @@ bool WorkerServiceClient::getWorkerStatus( WorkerReply & reply)
 }
 
 
+bool WorkerServiceClient::sendMapCommand(FileShard & shard, WorkerReply & reply) {
+	WorkerCommand wrk_cmd;
+	wrk_cmd.set_cmd_seq_num(1);	// TODO: keep it hard-coded for now
+	wrk_cmd.set_cmd_type(CMD_TYPE_MAP);
+
+	MapCommand* map_cmd = wrk_cmd.mutable_map_cmd();
+	FileShardInfo* info = map_cmd->mutable_shard_info();
+	for (FileSegment seg : shard.segments) {
+		FileSegmentInfo* fsi = info->add_segments();
+		fsi->set_file_name(seg.filename);
+		fsi->set_start_line(seg.start_line);
+		fsi->set_end_line(seg.end_line);
+	}
+
+	ClientContext context;
+
+	Status status = stub_->executeCommand(&context, wrk_cmd, &reply);
+
+	if (!status.ok()) {
+		std::cout << status.error_code() << ": " << status.error_message()
+				<< std::endl;
+		return false;
+	}
+	shard.mapped = true;
+	return true;
+}
+
+
 
 
 /* CS6210_TASK: Handle all the bookkeeping that Master is supposed to do.
@@ -89,7 +117,7 @@ class Master {
 		/* NOW you can add below, data members and member functions as per the need of your implementation*/
 		MapReduceSpec mr_spec_;
 		MasterState_t mr_state_;
-
+		vector<FileShard> file_shards_;
 };
 
 
@@ -98,6 +126,7 @@ class Master {
 Master::Master(const MapReduceSpec& mr_spec, const std::vector<FileShard>& file_shards) {
 	mr_state_ = MASTER_STATE_INIT;
 	mr_spec_ = mr_spec;
+	file_shards_ = file_shards;
 }
 
 
@@ -108,20 +137,24 @@ bool Master::run() {
 	// Run reduce on all reduce "objects"
 
 	while (1) {
+		cout << "Current state: " << mr_state_ << endl;
+
 		switch (mr_state_) {
 			case MASTER_STATE_INIT:
 			{
-				cout << "Current state: " << mr_state_ << endl;
-
 				// Query all workers about their status to know about available workers
 				cout << "sending getStatus command to workers" << endl;
-				for (Worker w: mr_spec_.workers) {
+				// for (Worker w: mr_spec_.workers) {
+				vector<Worker>::iterator w = mr_spec_.workers.begin();
+				for(w; w < mr_spec_.workers.end(); w++) {
 					WorkerReply reply;
-            		WorkerServiceClient clientObj( grpc::CreateChannel( w.ip, grpc::InsecureChannelCredentials()));
+            		WorkerServiceClient clientObj( grpc::CreateChannel( w->ip, grpc::InsecureChannelCredentials()));
 					if (clientObj.getWorkerStatus(reply) == true) {
 						cout << "Status Reply: " << reply.DebugString() << endl;
+						w->state = reply.status_reply().worker_state(); 
 					} else {
-						cout << "ERROR: getWorkerStatus reply failed for address: " << w.ip << endl;
+						w->state = STATE_FAILED; 
+						cout << "ERROR: getWorkerStatus reply failed for address: " << w->ip << endl;
 					}
 				}
 
@@ -132,19 +165,47 @@ bool Master::run() {
 
 			case MASTER_STATE_MAPPING:
 			{
-				cout << "Current state: " << mr_state_ << endl;
-
 				// Run map on all shards
+				bool all_mapped = true;
+				// for (FileShard shard : file_shards_) {
+				vector<FileShard>::iterator shard = file_shards_.begin();
+				for (shard; shard < file_shards_.end(); shard++) {
+					if (shard->mapped) {
+						cout << "Mapped\n";
+						continue;
+					}
+					all_mapped = false;
+					// for (Worker w: mr_spec_.workers) {
 
+					vector<Worker>::iterator w = mr_spec_.workers.begin();
+					for(w; w < mr_spec_.workers.end(); w++) {
+						if (w->state == STATE_IDLE) {
+							cout << "At least one idle" << endl;
+							w->state = STATE_WORKING;
 
-				// Done with this state, move next
-				mr_state_ = MASTER_STATE_REDUCING;
+							WorkerReply reply;
+		            		WorkerServiceClient clientObj( grpc::CreateChannel( w->ip, grpc::InsecureChannelCredentials()));
+							if (clientObj.sendMapCommand(*shard, reply) == true) {
+								w->state = STATE_IDLE;
+								cout << "Greate, one part down, only 1000 to go" << endl;
+							} else {
+								cout << "That went about how I expected it would" << endl;
+							}
+							break;
+						} else { 
+							cout << "ni" << w->state;
+						}
+					}
+				}
+				if (all_mapped) {
+					// Done with this state, move next
+					mr_state_ = MASTER_STATE_REDUCING;
+				}
 			}
 			break;
 
 			case MASTER_STATE_REDUCING:
 			{
-				cout << "Current state: " << mr_state_ << endl;
 
 				// Run reduce on all reduce "objects"
 
@@ -155,7 +216,6 @@ bool Master::run() {
 
 			case MASTER_STATE_COMPLETE:
 			{
-				cout << "Current state: " << mr_state_ << endl;
 
 				// Stop all workers
 
@@ -168,6 +228,7 @@ bool Master::run() {
 				break;
 
 		}
+		sleep(1);
 	}
 
 	return false;
