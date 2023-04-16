@@ -4,28 +4,42 @@ package masterworker;
 
 
 // Enums
-enum WorkerStatus
+enum WorkStatus
 {
-    ACCEPTED = 0;
-    PENDING = 1;
-    FINISHED = 2;
-    FAILED = 3;
+    WORK_ACCEPTED = 0;
+    WORK_PENDING = 1;
+    WORK_FINISHED = 2;
+    WORK_FAILED = 3;
 }
 
 enum CommandType
 {
-    MAP = 0;
-    REDUCE = 1;
-    STATUS = 2;
+    CMD_TYPE_MAP = 0;
+    CMD_TYPE_REDUCE = 1;
+    CMD_TYPE_STATUS = 2;
 }
 
 enum CommandStatus
 {
-    CMD_FAIL = 0;
-    CMD_SUCCESS = 1;
-    CMD_IN_PROGRESS = 2;
-    CMD_INVALID = 3;
+    CMD_STATUS_FAIL = 0;
+    CMD_STATUS_SUCCESS = 1;
+    CMD_STATUS_IN_PROGRESS = 2;
+    CMD_STATUS_INVALID = 3;
 }
+
+
+enum WorkerState {
+	STATE_IDLE = 0;
+	STATE_WORKING = 1;
+	STATE_FAILED = 2;
+};
+
+
+enum WorkerRole {
+	ROLE_NONE = 0;
+	ROLE_MAPPER = 1; 
+	ROLE_REDUCER = 2;
+};
 
 
 //-- Sharding related structures --
@@ -118,12 +132,14 @@ message ReduceReply
 
 message StatusReply
 {
-    WorkerStatus status = 1;
+    WorkStatus status = 1;
+    WorkerCommand cmd = 2;
 }
 
 
+
 //-- Services --
-service Worker {
+service WorkerService {
     rpc assignTask(WorkerCommand) returns (WorkerReply) {}
 }
 

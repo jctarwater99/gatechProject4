@@ -5,23 +5,17 @@
 #include <fstream>
 #include <vector>
 #include <sstream>
-using namespace std;
 
-enum WorkerState {
-	IDLE = 0,
-	WORKING = 1,
-	FAILED = 2,
-};
-enum WorkerJob {
-	NONE = 0,
-	MAP = 1, 
-	REDUCE = 2
-};
+#include "masterworker.grpc.pb.h"
+
+using namespace std;
+using namespace masterworker;
+
 
 struct Worker {
 	string ip;
-	enum WorkerState state = IDLE; 
-	enum WorkerJob job = NONE; 
+	WorkerState sate;
+	WorkerRole role;
 };
 
 /* CS6210_TASK: Create your data structure here for storing spec from the config file */
