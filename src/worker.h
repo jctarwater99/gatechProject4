@@ -85,7 +85,7 @@ class Worker {
 
 		void handleGetStatusRequest( CallData *msg);
 		void handleStopWorkerRequest( CallData *msg);
-		// void handleMapRequest( CallData *msg);
+		void handleMapRequest( CallData *msg);
 		// void handleReduceRequest( CallData *msg);
 
 
@@ -191,7 +191,7 @@ bool Worker::run() {
 
 			case CMD_TYPE_MAP:
 			{
-
+				handleMapRequest( msg);
 			}
 			break;
 
@@ -231,6 +231,7 @@ void Worker::handleGetStatusRequest( CallData *msg)
 	WorkerReply * reply = msg->getWorkerReply();
 	reply->set_cmd_seq_num( cmd_received->cmd_seq_num());
 	reply->set_cmd_type( cmd_received->cmd_type());
+	reply->set_cmd_status( CMD_STATUS_SUCCESS);
 
 	StatusReply *status_reply = reply->mutable_status_reply();
 	status_reply->set_worker_state( state_);
@@ -248,9 +249,33 @@ void Worker::handleStopWorkerRequest( CallData *msg)
 	WorkerReply * reply = msg->getWorkerReply();
 	reply->set_cmd_seq_num( cmd_received->cmd_seq_num());
 	reply->set_cmd_type( cmd_received->cmd_type());
+	reply->set_cmd_status( CMD_STATUS_SUCCESS);
 
 	msg->proceed();
 	cout << "CMD_TYPE_STOP_WORKER: Sent Reply " << endl;
+}
+
+
+void Worker::handleMapRequest( CallData *msg)
+{
+	WorkerCommand *cmd_received = msg->getWorkerCommand();
+	WorkerReply * reply = msg->getWorkerReply();
+
+	state_ = STATE_WORKING;
+	role_ = ROLE_MAPPER;
+
+	//TODO: Perform Mapping function
+
+	// Return reply:
+	reply->set_cmd_seq_num( cmd_received->cmd_seq_num());
+	reply->set_cmd_type( cmd_received->cmd_type());
+	reply->set_cmd_status( CMD_STATUS_SUCCESS);
+
+	msg->proceed();
+	cout << "CMD_TYPE_MAP: Sent Reply " << endl;
+
+	state_ = STATE_IDLE;
+	role_ = ROLE_NONE;
 }
 
 

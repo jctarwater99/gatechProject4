@@ -11,7 +11,7 @@ using namespace masterworker;
      that your master would use for its own bookkeeping and to convey the tasks to the workers for mapping */
 
 struct FileShard {
-     vector<struct FileSegment> segments;
+  	vector<struct FileSegment> segments;
 };
 
 struct FileSegment {
