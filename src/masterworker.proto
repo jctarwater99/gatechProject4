@@ -4,6 +4,15 @@ package masterworker;
 
 
 // Enums
+
+enum ShardStatus
+{
+	SHARD_STATUS_INIT = 0;
+	SHARD_STATUS_MAPPING_IN_PROGRESS = 1;
+	SHARD_STATUS_PROCESSED = 2;
+	SHARD_STATUS_FAILED = 3;
+}
+
 enum WorkStatus
 {
     WORK_INVALID = 0;
@@ -49,14 +58,14 @@ enum WorkerRole {
 //-- Sharding related structures --
 message FileSegmentInfo
 {
-    string file_name = 1;
+    string filename = 1;
     uint32 start_line = 2;
     uint32 end_line = 3;
 }
 
 message FileShardInfo
 {
-    repeated FileSegmentInfo segments = 1;    
+    repeated FileSegmentInfo segment = 1;    
 }
 
 
@@ -99,6 +108,8 @@ message WorkerCommand
 message MapCommand
 {
     FileShardInfo shard_info = 1;
+	string output_dir = 2;
+	uint32 n_output_files = 3;
 }
 
 message ReduceCommand
@@ -149,7 +160,7 @@ message StatusReply
 
 //-- Services --
 service WorkerService {
-    rpc executeCommand(WorkerCommand) returns (WorkerReply) {}
+    rpc ExecuteCommand(WorkerCommand) returns (WorkerReply) {}
 }
 
 /*

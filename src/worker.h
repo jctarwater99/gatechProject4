@@ -85,8 +85,8 @@ class Worker {
 		~Worker();
 
 		void handleGetStatusRequest( CallData *msg);
-		void handleMapRequest( CallData *msg);
 		void handleStopWorkerRequest( CallData *msg);
+		void handleMapRequest( CallData *msg);
 		// void handleReduceRequest( CallData *msg);
 
 
@@ -173,7 +173,7 @@ bool Worker::run() {
         // the tag uniquely identifying the request (so that different CallData
         // instances can serve different requests concurrently), in this case
         // the memory address of this CallData instance.
-        service_.RequestexecuteCommand(newReq->getServerContext(), newReq->getWorkerCommand(), newReq->getWorkerResponder(), cq_.get(), cq_.get(), newReq);
+        service_.RequestExecuteCommand(newReq->getServerContext(), newReq->getWorkerCommand(), newReq->getWorkerResponder(), cq_.get(), cq_.get(), newReq);
 
         // Block waiting to read the next event from the completion queue. The
         // event is uniquely identified by its tag, which in this case is the
@@ -232,6 +232,7 @@ void Worker::handleGetStatusRequest( CallData *msg)
 	WorkerReply * reply = msg->getWorkerReply();
 	reply->set_cmd_seq_num( cmd_received->cmd_seq_num());
 	reply->set_cmd_type( cmd_received->cmd_type());
+	reply->set_cmd_status( CMD_STATUS_SUCCESS);
 
 	StatusReply *status_reply = reply->mutable_status_reply();
 	status_reply->set_worker_state( state_);
@@ -243,32 +244,39 @@ void Worker::handleGetStatusRequest( CallData *msg)
 	cout << "CMD_TYPE_STATUS: Sent Reply " << endl;
 }
 
-void Worker::handleMapRequest( CallData *msg)
-{
-	WorkerCommand *cmd_received = msg->getWorkerCommand();
-	WorkerReply * reply = msg->getWorkerReply();
-	reply->set_cmd_seq_num( cmd_received->cmd_seq_num());
-	reply->set_cmd_type( cmd_received->cmd_type());
-
-	StatusReply *status_reply = reply->mutable_status_reply();
-	status_reply->set_worker_state( state_);
-	status_reply->set_work_status( work_status_);
-	status_reply->set_worker_role( role_);
-	sleep(1);
-
-	msg->proceed();
-	cout << "CMD_TYPE_STATUS: Sent Reply " << endl;
-}
-
 void Worker::handleStopWorkerRequest( CallData *msg)
 {
 	WorkerCommand *cmd_received = msg->getWorkerCommand();
 	WorkerReply * reply = msg->getWorkerReply();
 	reply->set_cmd_seq_num( cmd_received->cmd_seq_num());
 	reply->set_cmd_type( cmd_received->cmd_type());
+	reply->set_cmd_status( CMD_STATUS_SUCCESS);
 
 	msg->proceed();
 	cout << "CMD_TYPE_STOP_WORKER: Sent Reply " << endl;
+}
+
+
+void Worker::handleMapRequest( CallData *msg)
+{
+	WorkerCommand *cmd_received = msg->getWorkerCommand();
+	WorkerReply * reply = msg->getWorkerReply();
+
+	state_ = STATE_WORKING;
+	role_ = ROLE_MAPPER;
+
+	//TODO: Perform Mapping function
+
+	// Return reply:
+	reply->set_cmd_seq_num( cmd_received->cmd_seq_num());
+	reply->set_cmd_type( cmd_received->cmd_type());
+	reply->set_cmd_status( CMD_STATUS_SUCCESS);
+
+	msg->proceed();
+	cout << "CMD_TYPE_MAP: Sent Reply " << endl;
+
+	state_ = STATE_IDLE;
+	role_ = ROLE_NONE;
 }
 
 

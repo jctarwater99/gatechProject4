@@ -23,3 +23,15 @@ add_custom_command(
         DEPENDS ${destination}
         COMMENT "symbolic link ${destination} created."
 )
+
+#Copy input dir:
+set (input_dir_source "${CMAKE_CURRENT_SOURCE_DIR}/input")
+set (input_dir_destination "${CMAKE_BINARY_DIR}/bin/input")
+add_custom_command(
+		TARGET mrdemo POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory ${input_dir_source} ${input_dir_destination}
+		DEPENDS ${input_dir_destination}
+		COMMENT "Copied dir: From ${input_dir_source} -> ${input_dir_destination}"
+)
+
+
