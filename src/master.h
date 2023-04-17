@@ -246,8 +246,9 @@ bool Master::run() {
 				vector<Worker>::iterator w = mr_spec_.workers.begin();
 				for(w; w < mr_spec_.workers.end(); w++) {
 					WorkerReply reply;
-            		WorkerServiceClient clientObj( grpc::CreateChannel( w->ip, grpc::InsecureChannelCredentials()));
-					if (clientObj.getWorkerStatus(reply) == true) {
+            		// WorkerServiceClient clientObj( grpc::CreateChannel( w->ip, grpc::InsecureChannelCredentials()));
+					w->connection = new WorkerServiceClient( grpc::CreateChannel( w->ip, grpc::InsecureChannelCredentials()));
+					if (w->connection->getWorkerStatus(reply) == true) {
 						cout << "Status Reply: " << reply.DebugString() << endl;
 						w->state = reply.status_reply().worker_state(); 
 					} else {
@@ -284,14 +285,14 @@ bool Master::run() {
 								w->state = STATE_WORKING;
 
 								struct AsyncGrpcInfo info;
-								WorkerServiceClient clientObj( grpc::CreateChannel( w->ip, grpc::InsecureChannelCredentials()));
+								// WorkerServiceClient clientObj( grpc::CreateChannel( w->ip, grpc::InsecureChannelCredentials()));
 
 								info.worker	= &(*w);
 								info.shard = &(*shard);
 								info.tag = globalTag;
 								info.shard->state = IN_PROGRESS;
 								globalTag = static_cast<char*>(globalTag) + 1;
-								clientObj.sendMapCommand(cq, info);
+								w->connection->sendMapCommand(cq, info);
 								cout << "Greate, one part down, only 1000 to go" << endl;
 								rpcRequests.push_back(info);
 								cq_size++;

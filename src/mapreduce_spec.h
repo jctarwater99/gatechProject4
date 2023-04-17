@@ -11,11 +11,12 @@
 using namespace std;
 using namespace masterworker;
 
-
+class WorkerServiceClient;
 struct Worker {
 	string ip;
 	WorkerState state;
 	WorkerRole role;
+	WorkerServiceClient* connection;
 };
 
 /* CS6210_TASK: Create your data structure here for storing spec from the config file */
