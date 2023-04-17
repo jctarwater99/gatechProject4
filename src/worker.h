@@ -172,7 +172,7 @@ bool Worker::run() {
         // the tag uniquely identifying the request (so that different CallData
         // instances can serve different requests concurrently), in this case
         // the memory address of this CallData instance.
-        service_.RequestexecuteCommand(newReq->getServerContext(), newReq->getWorkerCommand(), newReq->getWorkerResponder(), cq_.get(), cq_.get(), newReq);
+        service_.RequestExecuteCommand(newReq->getServerContext(), newReq->getWorkerCommand(), newReq->getWorkerResponder(), cq_.get(), cq_.get(), newReq);
 
         // Block waiting to read the next event from the completion queue. The
         // event is uniquely identified by its tag, which in this case is the

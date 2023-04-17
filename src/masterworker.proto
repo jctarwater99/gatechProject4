@@ -10,6 +10,7 @@ enum ShardStatus
 	SHARD_STATUS_INIT = 0;
 	SHARD_STATUS_MAPPING_IN_PROGRESS = 1;
 	SHARD_STATUS_PROCESSED = 2;
+	SHARD_STATUS_FAILED = 3;
 }
 
 enum WorkStatus
@@ -158,7 +159,7 @@ message StatusReply
 
 //-- Services --
 service WorkerService {
-    rpc executeCommand(WorkerCommand) returns (WorkerReply) {}
+    rpc ExecuteCommand(WorkerCommand) returns (WorkerReply) {}
 }
 
 /*
