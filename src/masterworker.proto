@@ -149,7 +149,7 @@ message StatusReply
 
 //-- Services --
 service WorkerService {
-    rpc executeCommand(WorkerCommand) returns (WorkerReply) {}
+    rpc ExecuteCommand(WorkerCommand) returns (WorkerReply) {}
 }
 
 /*

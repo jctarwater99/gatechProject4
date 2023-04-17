@@ -173,7 +173,7 @@ bool Worker::run() {
         // the tag uniquely identifying the request (so that different CallData
         // instances can serve different requests concurrently), in this case
         // the memory address of this CallData instance.
-        service_.RequestexecuteCommand(newReq->getServerContext(), newReq->getWorkerCommand(), newReq->getWorkerResponder(), cq_.get(), cq_.get(), newReq);
+        service_.RequestExecuteCommand(newReq->getServerContext(), newReq->getWorkerCommand(), newReq->getWorkerResponder(), cq_.get(), cq_.get(), newReq);
 
         // Block waiting to read the next event from the completion queue. The
         // event is uniquely identified by its tag, which in this case is the
@@ -237,7 +237,7 @@ void Worker::handleGetStatusRequest( CallData *msg)
 	status_reply->set_worker_state( state_);
 	status_reply->set_work_status( work_status_);
 	status_reply->set_worker_role( role_);
-	cout << reply->DebugString() << endl;
+	// cout << reply->DebugString() << endl;
 
 	msg->proceed();
 	cout << "CMD_TYPE_STATUS: Sent Reply " << endl;
@@ -254,10 +254,11 @@ void Worker::handleMapRequest( CallData *msg)
 	status_reply->set_worker_state( state_);
 	status_reply->set_work_status( work_status_);
 	status_reply->set_worker_role( role_);
+	cout << reply->DebugString() << endl;
 	sleep(1);
 
 	msg->proceed();
-	cout << "CMD_TYPE_STATUS: Sent Reply " << endl;
+	cout << "CMD_TYPE_Map: Sent Reply " << endl;
 }
 
 void Worker::handleStopWorkerRequest( CallData *msg)
