@@ -65,7 +65,8 @@ message FileSegmentInfo
 
 message FileShardInfo
 {
-    repeated FileSegmentInfo segment = 1;    
+    uint32 number = 1;
+    repeated FileSegmentInfo segment = 2; 
 }
 
 
@@ -99,6 +100,7 @@ message MapCommand
     FileShardInfo shard_info = 1;
 	string output_dir = 2;
 	uint32 n_output_files = 3;
+    string user_id = 4;
 }
 
 message ReduceCommand

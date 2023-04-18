@@ -279,7 +279,7 @@ void Worker::handleMapRequest( CallData *msg)
 
 	// Perform Mapping function
 	bool failed = false;
-	auto mapper = get_mapper_from_task_factory("cs6210"); // TODO: actually get needed string
+	auto mapper = get_mapper_from_task_factory(map_cmd.user_id()); 
 	for (FileSegmentInfo segment :  map_cmd.shard_info().segment()) {
 		// skip to segment.first_line
 		string line;
@@ -301,7 +301,7 @@ void Worker::handleMapRequest( CallData *msg)
 	vector<pair<string, string> >& pairs = mapper->impl_->key_value_pairs;
 	sort(pairs.begin(), pairs.end());
 
-	string output_filename = "mapper_" + ip_addr_port_ + "_" + to_string(requests_handled_++);
+	string output_filename = "mapper_" + ip_addr_port_ + "_" + to_string(map_cmd.shard_info().number());
 	std::ofstream file(output_filename);
 	vector<pair<string, string> >::iterator it;
 	if (!file.is_open()) {

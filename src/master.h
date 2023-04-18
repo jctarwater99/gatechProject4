@@ -295,8 +295,10 @@ void Master::mapShard( FileShard & s, Worker & w )
 	MapCommand *map_cmd = cmd.mutable_map_cmd();
 	map_cmd->set_output_dir( mr_spec_.output_dir);
 	map_cmd->set_n_output_files( mr_spec_.n_output_files);
+	map_cmd->set_user_id( mr_spec_.user_id );
 
 	FileShardInfo *shard_info = map_cmd->mutable_shard_info();
+	shard_info->set_number(s.number);
 
 	for ( FileSegment fs : s.segments) {
 		FileSegmentInfo *fsi = shard_info->add_segment();
@@ -328,6 +330,7 @@ void Master::doShardMapping()
 						w.role = ROLE_MAPPER;
 						s.status = SHARD_STATUS_MAPPING_IN_PROGRESS;
 						mapShard( s, w);
+						break;
 					}
 				}
 			} else if (SHARD_STATUS_MAPPING_IN_PROGRESS == s.status) {
