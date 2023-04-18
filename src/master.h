@@ -34,14 +34,6 @@ typedef enum MasterState {
 } MasterState_t;
 
 
-typedef struct ShardMapState {
-	uint32_t seq_num;
-	struct FileShard shard;
-	struct Worker *worker;
-	ShardStatus status;
-} ShardMapState_t;
-
-
 typedef struct AsyncGrpcInfo {
 	WorkerReply reply;
 	Status status;
@@ -49,17 +41,20 @@ typedef struct AsyncGrpcInfo {
 	ClientContext context;
 	unique_ptr<ClientAsyncResponseReader<WorkerReply> > response_reader;
 
-	ShardMapState_t *sm;
+	struct Worker *worker;
+	struct FileShard *shard;
+
 } AsyncGrpcInfo_t;
 
 
 class WorkerServiceClient {
 
  public:
+
+	static const int MESSAGE_TIMEOUT_IN_SECONDS = 5;
+
 	WorkerServiceClient(shared_ptr<Channel>, string w_ip);
 	bool getWorkerStatus( WorkerReply & reply);
-	bool sendMapCommand(FileShard & shard, WorkerReply & reply);
-	bool sendMapCommand( WorkerCommand & cmd, WorkerReply & reply);
 	bool sendMapCommandAsync( WorkerCommand & cmd, AsyncGrpcInfo_t *info, CompletionQueue &cq);
 	//bool sendReduceCommand(const WorkerCommand & cmd, WorkerReply & reply);
 	bool sendStopWorkerCommand(WorkerReply & reply);
@@ -73,6 +68,8 @@ class WorkerServiceClient {
 
 	bool executeCommand( WorkerCommand & wrk_cmd, WorkerReply & reply);
 	bool executeCommandAsync( WorkerCommand & wrk_cmd, AsyncGrpcInfo_t *info, CompletionQueue &cq);
+
+	void setMessageTimeDeadline( ClientContext & context );
 };
 
 
@@ -82,10 +79,21 @@ WorkerServiceClient::WorkerServiceClient(shared_ptr<Channel> channel, string w_i
   {}
 
 
+void WorkerServiceClient::setMessageTimeDeadline( ClientContext & context )
+{
+	/*
+	// Set message time deadline:
+	time_point deadline = std::chrono::system_clock::now() + std::chrono::seconds(MESSAGE_TIMEOUT_IN_SECONDS);
+	context.set_deadline(deadline);
+	*/
+}
+
+
 bool WorkerServiceClient::executeCommand( WorkerCommand & wrk_cmd, WorkerReply & reply)
 {
 	ClientContext context;
 
+	setMessageTimeDeadline(context);
 	Status status = stub_->ExecuteCommand(&context, wrk_cmd, &reply);
 
 	if (!status.ok()) {
@@ -100,6 +108,7 @@ bool WorkerServiceClient::executeCommand( WorkerCommand & wrk_cmd, WorkerReply &
 
 bool WorkerServiceClient::executeCommandAsync( WorkerCommand & wrk_cmd, AsyncGrpcInfo_t *info, CompletionQueue &cq)
 {
+	setMessageTimeDeadline(info->context);
 	info->response_reader = stub_->AsyncExecuteCommand(&info->context, wrk_cmd, &cq);
 	info->response_reader->Finish(&info->reply, &info->status, (void*)info);
 
@@ -117,46 +126,12 @@ bool WorkerServiceClient::getWorkerStatus( WorkerReply & reply)
 }
 
 
-bool WorkerServiceClient::sendMapCommand(FileShard & shard, WorkerReply & reply) {
-	WorkerCommand wrk_cmd;
-	wrk_cmd.set_cmd_seq_num(1);	// TODO: keep it hard-coded for now
-	wrk_cmd.set_cmd_type(CMD_TYPE_MAP);
-
-	MapCommand* map_cmd = wrk_cmd.mutable_map_cmd();
-	FileShardInfo* info = map_cmd->mutable_shard_info();
-	for (FileSegment seg : shard.segments) {
-		FileSegmentInfo* fsi = info->add_segment();
-		fsi->set_filename(seg.filename);
-		fsi->set_start_line(seg.start_line);
-		fsi->set_end_line(seg.end_line);
-	}
-
-	ClientContext context;
-
-	Status status = stub_->ExecuteCommand(&context, wrk_cmd, &reply);
-
-	if (!status.ok()) {
-		std::cout << status.error_code() << ": " << status.error_message()
-				<< std::endl;
-		return false;
-	}
-	shard.mapped = true;
-	return true;
-}
-
-
 bool WorkerServiceClient::sendStopWorkerCommand(WorkerReply & reply)
 {
 	WorkerCommand wrk_cmd;
 	wrk_cmd.set_cmd_seq_num(1);	// TODO: keep it hard-coded for now
 	wrk_cmd.set_cmd_type(CMD_TYPE_STOP_WORKER);
 
-	return executeCommand(wrk_cmd, reply);
-}
-
-
-bool WorkerServiceClient::sendMapCommand( WorkerCommand & wrk_cmd, WorkerReply & reply)
-{
 	return executeCommand(wrk_cmd, reply);
 }
 
@@ -184,17 +159,18 @@ class Master {
 		MasterState_t mr_state_;
 		vector<FileShard> file_shards_;
 
-		std::vector<ShardMapState_t> shard_map_state_;
+		//std::vector<ShardMapState_t> shard_map_state_;
 		CompletionQueue cq_;
 
 		vector<WorkerServiceClient *> worker_clients_;
 
 		void getWorkersStatus();
 		void doShardMapping();
-		void mapShard( Worker & w, ShardMapState_t* sm );
+		void mapShard( FileShard & s, Worker & w );
 		void handleResponse();
 
 		WorkerServiceClient* getWorkerServiceClient(string ip);
+
 
 };
 
@@ -207,18 +183,15 @@ Master::Master(const MapReduceSpec& mr_spec, const std::vector<FileShard>& file_
 	mr_spec_ = mr_spec;
 	file_shards_ = file_shards;
 
+	// Create client-server channels
 	for ( Worker w : mr_spec.workers) {
 		WorkerServiceClient *c = new WorkerServiceClient ( grpc::CreateChannel( w.ip, grpc::InsecureChannelCredentials()), w.ip);
 		worker_clients_.push_back(c);
 	}
 
-	uint32_t s_count = 0;
-	for ( FileShard s : file_shards) {
-		ShardMapState_t sm;
-		sm.seq_num = s_count++;
-		sm.shard = s;
-		sm.status = SHARD_STATUS_INIT;
-		shard_map_state_.push_back(sm);
+	// Init shards status
+	for ( FileShard & s : file_shards_) {
+		s.status = SHARD_STATUS_INIT;
 	}
 }
 
@@ -254,13 +227,17 @@ void Master::handleResponse()
 	if (call->status.ok()) {
 		std::cout << "Received: " << call->reply.DebugString() << std::endl;
 
-		call->sm->status = SHARD_STATUS_PROCESSED;
-		call->sm->worker->state = STATE_IDLE;
+		call->shard->status = SHARD_STATUS_PROCESSED;
+		call->worker->state = STATE_IDLE;
 
 	} else {
+
+		std::cout << call->status.error_code() << ": " << call->status.error_message()
+				  << std::endl;
+
 		std::cout << "RPC failed" << std::endl;
-		call->sm->status = SHARD_STATUS_FAILED;
-		call->sm->worker->state = STATE_FAILED;
+		call->shard->status = SHARD_STATUS_FAILED;
+		call->worker->state = STATE_IDLE;
 	}
 
 	// Once we're complete, deallocate the call object.
@@ -296,12 +273,13 @@ void Master::getWorkersStatus()
 }
 
 
-void Master::mapShard( Worker & w, ShardMapState_t* sm )
+void Master::mapShard( FileShard & s, Worker & w )
 {
 	WorkerServiceClient* clientObj = getWorkerServiceClient(w.ip);
 
 	AsyncGrpcInfo_t *info = new AsyncGrpcInfo_t;
-	info->sm = sm;
+	info->worker = &w;
+	info->shard = &s;
 
 	WorkerCommand cmd;
 	cmd.set_cmd_seq_num(1); // TODO: Hardcoded
@@ -313,26 +291,15 @@ void Master::mapShard( Worker & w, ShardMapState_t* sm )
 
 	FileShardInfo *shard_info = map_cmd->mutable_shard_info();
 
-	for ( FileSegment fs : sm->shard.segments) {
+	for ( FileSegment fs : s.segments) {
 		FileSegmentInfo *fsi = shard_info->add_segment();
 		fsi->set_filename( fs.filename);
 		fsi->set_start_line( fs.start_line);
 		fsi->set_end_line( fs.end_line);
 	}
 
-	if (clientObj->sendMapCommandAsync(cmd, info, cq_) == true) {
-
-		//rpcRequests_.push_back(info);
-
-		/*
-		cout << "Status Reply: " << reply.DebugString() << endl;
-		if (reply.cmd_status() == CMD_STATUS_SUCCESS) {
-			sm.status = SHARD_STATUS_PROCESSED;
-		}
-		*/
-	} else {
-		cout << "ERROR: getWorkerStatus reply failed for address: " << w.ip << endl;
-	}
+	// Send command to client
+	clientObj->sendMapCommandAsync(cmd, info, cq_);
 
 }
 
@@ -344,20 +311,19 @@ void Master::doShardMapping()
 	// Run map on all shards
 	while (1) {
 		allShardsMappingDone = true;
-		for ( ShardMapState_t & sm : shard_map_state_) {
-			if (SHARD_STATUS_INIT == sm.status) {
+		for ( FileShard & s : file_shards_ ) {
+			if ((SHARD_STATUS_INIT == s.status) || (SHARD_STATUS_FAILED == s.status)) {
 				allShardsMappingDone = false;
 				// Map this shard to available worker:
 				for (Worker & w: mr_spec_.workers) {
 					if (STATE_IDLE == w.state) {
 						w.state = STATE_WORKING;
 						w.role = ROLE_MAPPER;
-						sm.status = SHARD_STATUS_MAPPING_IN_PROGRESS;
-						sm.worker = &w;
-						mapShard(w, &sm);
+						s.status = SHARD_STATUS_MAPPING_IN_PROGRESS;
+						mapShard( s, w);
 					}
 				}
-			} else if (SHARD_STATUS_MAPPING_IN_PROGRESS == sm.status) {
+			} else if (SHARD_STATUS_MAPPING_IN_PROGRESS == s.status) {
 				allShardsMappingDone = false;
 			}
 		}
@@ -365,7 +331,6 @@ void Master::doShardMapping()
 		if (true == allShardsMappingDone) {
 			break;	// break while
 		} else {
-			// TODO: This function isn't good, it puts most of the work on 1 worker somehow
 			handleResponse();
 		}
 
@@ -439,7 +404,7 @@ bool Master::run() {
 				break;
 
 		}
-		sleep(1);
+		sleep(1);	// TODO: Do we need this?
 	}
 
 	return false;
