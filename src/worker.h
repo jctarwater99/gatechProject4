@@ -195,6 +195,13 @@ bool Worker::run() {
 
 			case CMD_TYPE_MAP:
 			{
+				/*
+				// Test delay from one worker
+				if (ip_addr_port_ == "localhost:50051") {
+					sleep(10);
+				}
+				*/
+
 				handleMapRequest(msg);
 			}
 			break;
@@ -351,7 +358,18 @@ void CallData::proceed() {
         // memory address of this instance as the uniquely identifying tag for
         // the event.
         status_ = FINISH;
-        responder_.Finish(reply_, Status::OK, this);
+
+		Status retStatus = Status::OK;
+
+		/*
+		if (ctx_.IsCancelled()) {
+			retStatus = Status::CANCELLED;
+			cout << " CANCELLED by the client: ********" << endl;
+		}
+		*/
+
+        //responder_.Finish(reply_, Status::OK, this);
+        responder_.Finish(reply_, retStatus, this);
 
     } else {
 		cout << "CallData: FINISH call, deleteing myself" << endl;

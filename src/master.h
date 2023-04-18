@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <grpc++/grpc++.h>
 #include<unistd.h>
 #include "masterworker.grpc.pb.h"
@@ -8,6 +9,8 @@
 
 
 using namespace std;
+using namespace std::chrono;
+using namespace std::literals;
 
 using grpc::CompletionQueue;
 using grpc::ClientAsyncResponseReader;
@@ -51,7 +54,7 @@ class WorkerServiceClient {
 
  public:
 
-	static const int MESSAGE_TIMEOUT_IN_SECONDS = 5;
+	static const int MESSAGE_TIMEOUT_IN_SECONDS;
 
 	WorkerServiceClient(shared_ptr<Channel>, string w_ip);
 	bool getWorkerStatus( WorkerReply & reply);
@@ -73,6 +76,7 @@ class WorkerServiceClient {
 };
 
 
+const int WorkerServiceClient::MESSAGE_TIMEOUT_IN_SECONDS = 5;
 
 WorkerServiceClient::WorkerServiceClient(shared_ptr<Channel> channel, string w_ip)
   : stub_(WorkerService::NewStub(channel)), worker_ip_(w_ip)
@@ -81,11 +85,15 @@ WorkerServiceClient::WorkerServiceClient(shared_ptr<Channel> channel, string w_i
 
 void WorkerServiceClient::setMessageTimeDeadline( ClientContext & context )
 {
-	/*
 	// Set message time deadline:
-	time_point deadline = std::chrono::system_clock::now() + std::chrono::seconds(MESSAGE_TIMEOUT_IN_SECONDS);
+    time_point<system_clock> now_point = system_clock::now();
+	auto deadline = now_point  + seconds(MESSAGE_TIMEOUT_IN_SECONDS);
+
+    time_t tt_now = system_clock::to_time_t(now_point);
+    time_t tt_deadline = system_clock::to_time_t(deadline);
+    //cout << "Now time: " << ctime(&tt_now) << ", deadline: " << ctime(&tt_deadline) << endl;
+
 	context.set_deadline(deadline);
-	*/
 }
 
 
@@ -232,10 +240,9 @@ void Master::handleResponse()
 
 	} else {
 
-		std::cout << call->status.error_code() << ": " << call->status.error_message()
+		std::cout << "ERROR: RPC failed*****: " << call->status.error_code() << ": " << call->status.error_message()
 				  << std::endl;
 
-		std::cout << "RPC failed" << std::endl;
 		call->shard->status = SHARD_STATUS_FAILED;
 		call->worker->state = STATE_IDLE;
 	}
