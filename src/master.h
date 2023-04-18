@@ -365,6 +365,7 @@ void Master::doShardMapping()
 		if (true == allShardsMappingDone) {
 			break;	// break while
 		} else {
+			// TODO: This function isn't good, it puts most of the work on 1 worker somehow
 			handleResponse();
 		}
 

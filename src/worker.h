@@ -4,6 +4,7 @@
 #include <grpc/support/log.h>
 #include <grpcpp/grpcpp.h>
 #include<unistd.h>
+#include<fstream>
 
 #include <mr_task_factory.h>
 #include "mr_tasks.h"
@@ -95,6 +96,7 @@ class Worker {
 		WorkerState state_;
 		WorkStatus work_status_;
 		WorkerRole role_;
+		int requests_handled_;
 		std::string ip_addr_port_;
         std::unique_ptr<ServerCompletionQueue> cq_;
         WorkerService::AsyncService service_;
@@ -108,6 +110,7 @@ class Worker {
 Worker::Worker(std::string ip_addr_port) {
 	std::cout << "ip_addr_port: " << ip_addr_port << std::endl;
 	ip_addr_port_ = ip_addr_port;
+	requests_handled_ = 0;
 
 	state_ = STATE_IDLE;
 	work_status_ = WORK_INVALID;
@@ -261,16 +264,59 @@ void Worker::handleMapRequest( CallData *msg)
 {
 	WorkerCommand *cmd_received = msg->getWorkerCommand();
 	WorkerReply * reply = msg->getWorkerReply();
+	MapCommand map_cmd = cmd_received->map_cmd();
 
 	state_ = STATE_WORKING;
 	role_ = ROLE_MAPPER;
 
-	//TODO: Perform Mapping function
+
+	// Perform Mapping function
+	bool failed = false;
+	auto mapper = get_mapper_from_task_factory("cs6210"); // TODO: actually get needed string
+	for (FileSegmentInfo segment :  map_cmd.shard_info().segment()) {
+		// skip to segment.first_line
+		string line;
+		ifstream file(segment.filename());
+		if (!file.is_open()) {
+			failed = true;
+			break;
+		}
+		for (int i = 0; i < segment.start_line() && file.good(); i++) {
+			getline(file, line);
+		}
+		for (int i = segment.start_line(); i < segment.end_line() && file.good(); i++) {
+			getline(file, line);
+		 	mapper->map(line);
+		}
+	}
+
+	// Save to intermediate file
+	vector<pair<string, string> >& pairs = mapper->impl_->key_value_pairs;
+	sort(pairs.begin(), pairs.end());
+
+	string output_filename = "mapper_" + ip_addr_port_ + "_" + to_string(requests_handled_++);
+	std::ofstream file(output_filename);
+	vector<pair<string, string> >::iterator it;
+	if (!file.is_open()) {
+		failed = true;
+	} else {
+		for (it = pairs.begin(); it != pairs.end(); it++) {
+			file << (*it).first << " " << (*it).second << "\n";
+		}
+		file.close();		
+	}
 
 	// Return reply:
 	reply->set_cmd_seq_num( cmd_received->cmd_seq_num());
 	reply->set_cmd_type( cmd_received->cmd_type());
-	reply->set_cmd_status( CMD_STATUS_SUCCESS);
+	if (failed) {
+		reply->set_cmd_status( CMD_STATUS_FAIL);
+	} else {
+		reply->set_cmd_status( CMD_STATUS_SUCCESS);
+		MapReply * r = reply->mutable_map_reply();
+		r->set_mapper_id(ip_addr_port_);
+		r->add_filenames(output_filename);
+	}
 
 	msg->proceed();
 	cout << "CMD_TYPE_MAP: Sent Reply " << endl;

@@ -70,17 +70,6 @@ message FileShardInfo
 
 
 //-- Mapping related structures --
-message MapResult
-{
-    string file_name = 1;
-}
-
-message MapOutputInfo
-{
-    string mapper_id = 1;
-    repeated MapResult map_result = 2;    
-}
-
 
 //-- Reducing related structures --
 message ReduceResult
@@ -115,7 +104,8 @@ message MapCommand
 message ReduceCommand
 {
     // Map-output will become input to Reduce stage
-    MapOutputInfo map_output_info = 1;
+    // MapOutputInfo map_output_info = 1;
+    string info = 1;
 }
 
 message StatusCommand
@@ -140,7 +130,8 @@ message WorkerReply
 
 message MapReply
 {
-    MapOutputInfo map_output_info = 1;
+    string mapper_id = 1;
+    repeated string filenames = 2;    
 }
 
 message ReduceReply
