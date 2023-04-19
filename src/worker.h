@@ -297,20 +297,32 @@ void Worker::handleMapRequest( CallData *msg)
 		}
 	}
 
-	// Save to intermediate file
+	// Save to intermediate files
+
 	vector<pair<string, string> >& pairs = mapper->impl_->key_value_pairs;
 	sort(pairs.begin(), pairs.end());
+	vector<ofstream> files;
+	int n_output_files = map_cmd.n_output_files();
 
-	string output_filename = "mapper_" + ip_addr_port_ + "_" + to_string(map_cmd.shard_info().number());
-	std::ofstream file(output_filename);
-	vector<pair<string, string> >::iterator it;
-	if (!file.is_open()) {
-		failed = true;
-	} else {
-		for (it = pairs.begin(); it != pairs.end(); it++) {
-			file << (*it).first << " " << (*it).second << "\n";
+	// string output_filename = "mapper_" + ip_addr_port_ + "_" + to_string(map_cmd.shard_info().number());
+	std::ofstream file; 
+	for (int i = 0; i < n_output_files; i++) {
+		// file = new ofstream("i_" + ip_addr_port_ + "_m" + to_string(map_cmd.shard_info().number()) + "_r" + to_string(i));
+		files.push_back(ofstream("i_" + ip_addr_port_ + "_m" + to_string(map_cmd.shard_info().number()) + "_r" + to_string(i)));
+		if (!files.back().is_open()) {
+			failed = true;
+			break;
 		}
-		file.close();		
+		// files.push_back(file);
+	}
+ 	if (!failed) {
+		vector<pair<string, string> >::iterator it;
+		for (it = pairs.begin(); it != pairs.end(); it++) {
+			std::hash<std::string> hasher;
+			auto hashed_string = hasher((*it).first);
+			files[hashed_string % n_output_files] << (*it).first << " " << (*it).second << "\n";
+		}
+		// file.close(); // Called automatically when destructor is called
 	}
 
 	// Return reply:
@@ -322,9 +334,16 @@ void Worker::handleMapRequest( CallData *msg)
 		reply->set_cmd_status( CMD_STATUS_SUCCESS);
 		MapReply * r = reply->mutable_map_reply();
 		r->set_mapper_id(ip_addr_port_);
-		r->add_filenames(output_filename);
-	}
 
+		for (int i = 0; i < n_output_files; i++) {
+			r->add_filenames("i_" + ip_addr_port_ + "_m" + to_string(map_cmd.shard_info().number()) + "_r" + to_string(i));
+		}
+	}
+	// while (!files.empty()) {
+	// 	delete files.back();
+	// 	files.pop_back();
+	// }
+		
 	msg->proceed();
 	cout << "CMD_TYPE_MAP: Sent Reply " << endl;
 
