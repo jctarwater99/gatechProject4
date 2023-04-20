@@ -5,12 +5,15 @@
 #include <grpcpp/grpcpp.h>
 #include<unistd.h>
 #include<fstream>
+#include<sstream>
 
 #include <mr_task_factory.h>
 #include "mr_tasks.h"
 
 #include "masterworker.grpc.pb.h"
 
+// #include <filesystem>
+// namespace fs = std::filesystem;
 
 using namespace std;
 
@@ -88,7 +91,7 @@ class Worker {
 		void handleGetStatusRequest( CallData *msg);
 		void handleStopWorkerRequest( CallData *msg);
 		void handleMapRequest( CallData *msg);
-		// void handleReduceRequest( CallData *msg);
+		void handleReduceRequest( CallData *msg);
 
 
 	private:
@@ -208,7 +211,7 @@ bool Worker::run() {
 
 			case CMD_TYPE_REDUCE:
 			{
-
+				handleReduceRequest(msg);
 			}
 			break;
 
@@ -308,7 +311,7 @@ void Worker::handleMapRequest( CallData *msg)
 	std::ofstream file; 
 	for (int i = 0; i < n_output_files; i++) {
 		// file = new ofstream("i_" + ip_addr_port_ + "_m" + to_string(map_cmd.shard_info().number()) + "_r" + to_string(i));
-		files.push_back(ofstream("i_" + ip_addr_port_ + "_m" + to_string(map_cmd.shard_info().number()) + "_r" + to_string(i)));
+		files.push_back(ofstream("intermediate_m" + to_string(map_cmd.shard_info().number()) + "_r" + to_string(i) + ".txt"));
 		if (!files.back().is_open()) {
 			failed = true;
 			break;
@@ -336,16 +339,101 @@ void Worker::handleMapRequest( CallData *msg)
 		r->set_mapper_id(ip_addr_port_);
 
 		for (int i = 0; i < n_output_files; i++) {
-			r->add_filenames("i_" + ip_addr_port_ + "_m" + to_string(map_cmd.shard_info().number()) + "_r" + to_string(i));
+			r->add_filenames("intermediate_m" + to_string(map_cmd.shard_info().number()) + "_r" + to_string(i) + ".txt");
 		}
 	}
-	// while (!files.empty()) {
-	// 	delete files.back();
-	// 	files.pop_back();
-	// }
 		
 	msg->proceed();
 	cout << "CMD_TYPE_MAP: Sent Reply " << endl;
+
+	state_ = STATE_IDLE;
+	role_ = ROLE_NONE;
+}
+
+
+void Worker::handleReduceRequest( CallData *msg)
+{
+	WorkerCommand *cmd_received = msg->getWorkerCommand();
+	WorkerReply * reply = msg->getWorkerReply();
+	ReduceCommand reduce_cmd = cmd_received->reduce_cmd();
+
+	state_ = STATE_WORKING;
+	role_ = ROLE_REDUCER;
+
+
+	// Perform Mapping function
+	bool failed = false;
+	auto reducer = get_reducer_from_task_factory(reduce_cmd.user_id()); 
+
+	vector<pair<string, string> > temp_pairs;
+
+	for (int i = 0; i < reduce_cmd.n_intermediate_files(); i++) {
+		string line;
+		ifstream file("intermediate_m" + to_string(i) + "_r" + to_string(reduce_cmd.reducer_num()) + ".txt");
+		if (!file.is_open()) {
+			failed = true;
+			break;
+		}
+		string key, value;
+		while (getline(file, line)) {
+			istringstream is_line(line);
+			if (getline(is_line, key, ' ') && getline(is_line, value)) {
+				temp_pairs.push_back(make_pair(key, value));
+			}
+		}
+	}
+
+	sort(temp_pairs.begin(), temp_pairs.end());
+
+	string previous;
+	vector<string> values;
+	vector<pair<string, string> >::iterator it;
+	for (it = temp_pairs.begin(); it != temp_pairs.end(); it++) {
+		if (previous.compare("") == 0 || (*it).first.compare(previous) == 0) {
+			values.push_back((*it).second);
+			previous = (*it).first;
+		} else {
+			reducer->reduce(previous, values);
+			previous = (*it).first;
+			values.clear();
+			values.push_back((*it).second);
+		}
+	}
+	temp_pairs.clear();
+
+	// Save to output file
+	vector<pair<string, string> >& pairs = reducer->impl_->key_value_pairs;
+	sort(pairs.begin(), pairs.end());
+	vector<ofstream> files;
+	std::ofstream file("output_"+ to_string(reduce_cmd.reducer_num()) + ".txt"); // TODO: Fix folder
+	if (!file.is_open()) {
+		failed = true;
+	}
+	if (!failed) {
+		vector<pair<string, string> >::iterator it;
+		for (it = pairs.begin(); it != pairs.end(); it++) {
+			file << (*it).first << " " << (*it).second << "\n";
+		}
+		// file.close(); // Called automatically when destructor is called
+	}
+
+	// Return reply:
+	reply->set_cmd_seq_num( cmd_received->cmd_seq_num());
+	reply->set_cmd_type( cmd_received->cmd_type());
+	if (failed) {
+		reply->set_cmd_status( CMD_STATUS_FAIL);
+	} else {
+		reply->set_cmd_status( CMD_STATUS_SUCCESS);
+		// MapReply * r = reply->mutable_map_reply();
+		// r->set_mapper_id(ip_addr_port_);
+
+		// for (int i = 0; i < n_output_files; i++) {
+		// 	r->add_filenames("i_" + ip_addr_port_ + "_m" + to_string(map_cmd.shard_info().number()) + "_r" + to_string(i));
+		// }
+	}
+		
+	msg->proceed();
+	cout << "CMD_TYPE_REDUCE: Sent Reply " << endl;
 
 	state_ = STATE_IDLE;
 	role_ = ROLE_NONE;

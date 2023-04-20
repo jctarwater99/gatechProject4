@@ -36,6 +36,12 @@ typedef enum MasterState {
 
 } MasterState_t;
 
+typedef enum ReduceJobState {
+	REDUCE_JOB_INIT = 0,
+	REDUCE_JOB_IN_PROGRESS,
+	REDUCE_JOB_COMPLETE,
+	REDUCE_JOB_FAILED
+} ReduceJobState;
 
 typedef struct AsyncGrpcInfo {
 	WorkerReply reply;
@@ -46,6 +52,7 @@ typedef struct AsyncGrpcInfo {
 
 	struct Worker *worker;
 	struct FileShard *shard;
+	ReduceJobState *reduce_job;
 
 } AsyncGrpcInfo_t;
 
@@ -166,6 +173,7 @@ class Master {
 		MapReduceSpec mr_spec_;
 		MasterState_t mr_state_;
 		vector<FileShard> file_shards_;
+		vector<ReduceJobState> reduce_jobs_complete_;
 
 		//std::vector<ShardMapState_t> shard_map_state_;
 		CompletionQueue cq_;
@@ -174,8 +182,12 @@ class Master {
 
 		void getWorkersStatus();
 		void doShardMapping();
+		void doReducing();
 		void mapShard( FileShard & s, Worker & w );
-		void handleResponse();
+		// void runReduceJob( ReduceJobState & s, Worker & w );
+		void runReduceJob( ReduceJobState & s, Worker & w, int reducer_num );
+		void handleMapResponse();
+		void handleReduceResponse();
 
 		WorkerServiceClient* getWorkerServiceClient(string ip);
 
@@ -190,6 +202,11 @@ Master::Master(const MapReduceSpec& mr_spec, const std::vector<FileShard>& file_
 	mr_state_ = MASTER_STATE_INIT;
 	mr_spec_ = mr_spec;
 	file_shards_ = file_shards;
+
+	for (int i = 0; i < mr_spec.n_output_files; i++) {
+		ReduceJobState s = REDUCE_JOB_INIT;
+		reduce_jobs_complete_.push_back(s);
+	}
 
 	// Create client-server channels
 	for ( Worker w : mr_spec.workers) {
@@ -221,7 +238,35 @@ WorkerServiceClient* Master::getWorkerServiceClient(string ip)
 }
 
 
-void Master::handleResponse()
+void Master::handleMapResponse()
+{
+	cout << "handleResponse() ..waiting" << endl;
+
+	void* got_tag;
+    bool ok = false;
+    GPR_ASSERT(cq_.Next(&got_tag, &ok));
+    GPR_ASSERT(ok);
+
+	AsyncGrpcInfo_t* call = static_cast<AsyncGrpcInfo_t*>(got_tag);
+
+	if (call->status.ok()) {
+		std::cout << "Received: " << call->reply.DebugString() << std::endl;
+		call->shard->status = SHARD_STATUS_PROCESSED;
+	} else {
+
+		std::cout << "ERROR: RPC failed*****: " << call->status.error_code() << ": " << call->status.error_message()
+				  << std::endl;
+
+		call->shard->status = SHARD_STATUS_FAILED;
+	}
+	call->worker->state = STATE_IDLE;
+
+	// Once we're complete, deallocate the call object.
+	delete call;
+
+}
+
+void Master::handleReduceResponse()
 {
 	cout << "handleResponse() ..waiting" << endl;
 
@@ -235,22 +280,20 @@ void Master::handleResponse()
 	if (call->status.ok()) {
 		std::cout << "Received: " << call->reply.DebugString() << std::endl;
 
-		call->shard->status = SHARD_STATUS_PROCESSED;
-		call->worker->state = STATE_IDLE;
-
+		*(call->reduce_job) = REDUCE_JOB_COMPLETE;
 	} else {
 
 		std::cout << "ERROR: RPC failed*****: " << call->status.error_code() << ": " << call->status.error_message()
 				  << std::endl;
-
-		call->shard->status = SHARD_STATUS_FAILED;
-		call->worker->state = STATE_IDLE;
+		*(call->reduce_job) = REDUCE_JOB_FAILED;
 	}
+	call->worker->state = STATE_IDLE;
 
 	// Once we're complete, deallocate the call object.
 	delete call;
 
 }
+
 
 /*
 void Master::emptyQueue(CompletionQueue & cq, vector<AsyncGrpcInfo_t> &rpcRequests) {
@@ -341,7 +384,72 @@ void Master::doShardMapping()
 		if (true == allShardsMappingDone) {
 			break;	// break while
 		} else {
-			handleResponse();
+			handleMapResponse();
+		}
+
+		// Fetch Workers status:
+		//getWorkersStatus();
+
+	}
+}
+
+
+void Master::runReduceJob( ReduceJobState & s, Worker & w, int reducer_num )
+{
+	WorkerServiceClient* clientObj = getWorkerServiceClient(w.ip);
+
+	AsyncGrpcInfo_t *info = new AsyncGrpcInfo_t;
+	info->worker = &w;
+	// info->shard = &s;
+	info->reduce_job = &s;
+
+	WorkerCommand cmd;
+	cmd.set_cmd_seq_num(1); // TODO: Hardcoded
+	cmd.set_cmd_type(CMD_TYPE_REDUCE);
+
+	ReduceCommand *reduce_cmd = cmd.mutable_reduce_cmd();
+	reduce_cmd->set_output_dir( mr_spec_.output_dir);
+	reduce_cmd->set_n_intermediate_files( file_shards_.size());
+	reduce_cmd->set_user_id( mr_spec_.user_id );
+	reduce_cmd->set_reducer_num( reducer_num );
+
+
+	// Send reduce to client
+	clientObj->sendMapCommandAsync(cmd, info, cq_); // I don't really see any reason not to reuse this function
+
+}
+
+void Master::doReducing()
+{
+	bool allReducingJobsComplete = false;
+
+	// Run reduce on all shards
+	while (1) {
+		allReducingJobsComplete = true;
+		int i = 0;
+		for ( ReduceJobState & reduce_job_state : reduce_jobs_complete_ ) {
+			if (reduce_job_state == REDUCE_JOB_INIT || reduce_job_state == REDUCE_JOB_FAILED) {
+				allReducingJobsComplete = false;
+				// Map this shard to available worker:
+				for (Worker & w: mr_spec_.workers) {
+					if (STATE_IDLE == w.state) {
+						w.state = STATE_WORKING;
+						w.role = ROLE_REDUCER;
+						reduce_job_state = REDUCE_JOB_IN_PROGRESS;
+						runReduceJob( reduce_job_state, w, i);
+						break;
+					}
+				}
+			} else if (reduce_job_state == REDUCE_JOB_IN_PROGRESS) { // TODO: Race condition? 
+				allReducingJobsComplete = false;
+			}
+			i++;
+		}
+
+		if (true == allReducingJobsComplete) {
+			break;	// break while
+		} else {
+			handleReduceResponse();
 		}
 
 		// Fetch Workers status:
@@ -384,6 +492,7 @@ bool Master::run() {
 			{
 
 				// Run reduce on all reduce "objects"
+				doReducing();
 
 				// Done with this state, move next
 				mr_state_ = MASTER_STATE_COMPLETE;

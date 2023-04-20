@@ -105,14 +105,15 @@ message MapCommand
 
 message ReduceCommand
 {
-    // Map-output will become input to Reduce stage
-    // MapOutputInfo map_output_info = 1;
-    string info = 1;
+	string output_dir = 1;
+	uint32 n_intermediate_files = 2;
+    string user_id = 3;
+    uint32 reducer_num = 4;
 }
 
 message StatusCommand
 {
-    // keep placeholder for now
+    // keep placeholder for now 
     uint32 dummy = 1;
 }
 
