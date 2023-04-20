@@ -187,23 +187,22 @@ bool Worker::run() {
         // The return value of Next should always be checked. This return value
         // tells us whether there is any kind of event or cq_ is shutting down.
         GPR_ASSERT(cq_->Next(&tag, &ok));
-        GPR_ASSERT(ok);
+        //GPR_ASSERT(ok);  // It can be false also in case of cancellation, so comment assert
 
 		msg = static_cast<CallData*>(tag);
 		WorkerCommand *cmd_received = msg->getWorkerCommand();
 		CommandType cmd_type = cmd_received->cmd_type();
-		std::cout << "Worker Received Command : " << cmd_received->DebugString() << std::endl;
+		std::cout << "Ok value: " << ok <<  ", Worker Received Command : " << cmd_received->DebugString() << std::endl;
 
 		switch (cmd_type) {
 
 			case CMD_TYPE_MAP:
 			{
-				/*
+				// TODO: Remove this delay after testing is done.
 				// Test delay from one worker
 				if (ip_addr_port_ == "localhost:50051") {
-					sleep(10);
+					sleep(20);
 				}
-				*/
 
 				handleMapRequest(msg);
 			}
@@ -230,9 +229,9 @@ bool Worker::run() {
 			break;
 
 			default:
+				return true;
 				break;
 		}
-
 	}
 
 	return false;
@@ -456,6 +455,7 @@ void CallData::proceed() {
     if (status_ == CREATE) {
         // Make this instance progress to the PROCESS state.
         status_ = PROCESS;
+		//ctx_.AsyncNotifyWhenDone(this);
 
     } else if (status_ == PROCESS) {
 
@@ -469,7 +469,7 @@ void CallData::proceed() {
 		Status retStatus = Status::OK;
 
 		/*
-		if (ctx_.IsCancelled()) {
+		if (ctx_.IsCancelled()) {  // TODO: uncomment above AsyncNotifyWhenDone() call along with this
 			retStatus = Status::CANCELLED;
 			cout << " CANCELLED by the client: ********" << endl;
 		}

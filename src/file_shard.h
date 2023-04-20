@@ -2,8 +2,10 @@
 
 #include <vector>
 #include <fstream>
+#include <chrono>
 #include "mapreduce_spec.h"
 using namespace std;
+using namespace std::chrono;
 using namespace masterworker;
 
 
@@ -13,6 +15,7 @@ using namespace masterworker;
 struct FileShard {
      int number;
      ShardStatus status;
+	 steady_clock::time_point map_begin_time;
      vector<struct FileSegment> segments;
 };
 

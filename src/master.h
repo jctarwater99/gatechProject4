@@ -28,6 +28,10 @@ using grpc::Status;
 using namespace masterworker;
 
 
+static constexpr int MESSAGE_TIMEOUT_IN_SECONDS = 5;
+static constexpr float MICRO_SECONDS = 1000000.0;
+
+
 typedef enum MasterState {
 	MASTER_STATE_INIT = 0,
 	MASTER_STATE_MAPPING,
@@ -61,8 +65,6 @@ class WorkerServiceClient {
 
  public:
 
-	static const int MESSAGE_TIMEOUT_IN_SECONDS;
-
 	WorkerServiceClient(shared_ptr<Channel>, string w_ip);
 	bool getWorkerStatus( WorkerReply & reply);
 	bool sendMapCommandAsync( WorkerCommand & cmd, AsyncGrpcInfo_t *info, CompletionQueue &cq);
@@ -83,8 +85,6 @@ class WorkerServiceClient {
 };
 
 
-const int WorkerServiceClient::MESSAGE_TIMEOUT_IN_SECONDS = 5;
-
 WorkerServiceClient::WorkerServiceClient(shared_ptr<Channel> channel, string w_ip)
   : stub_(WorkerService::NewStub(channel)), worker_ip_(w_ip)
   {}
@@ -96,8 +96,8 @@ void WorkerServiceClient::setMessageTimeDeadline( ClientContext & context )
     time_point<system_clock> now_point = system_clock::now();
 	auto deadline = now_point  + seconds(MESSAGE_TIMEOUT_IN_SECONDS);
 
-    time_t tt_now = system_clock::to_time_t(now_point);
-    time_t tt_deadline = system_clock::to_time_t(deadline);
+    //time_t tt_now = system_clock::to_time_t(now_point);
+    //time_t tt_deadline = system_clock::to_time_t(deadline);
     //cout << "Now time: " << ctime(&tt_now) << ", deadline: " << ctime(&tt_deadline) << endl;
 
 	context.set_deadline(deadline);
@@ -245,24 +245,34 @@ void Master::handleMapResponse()
 	void* got_tag;
     bool ok = false;
     GPR_ASSERT(cq_.Next(&got_tag, &ok));
-    GPR_ASSERT(ok);
 
 	AsyncGrpcInfo_t* call = static_cast<AsyncGrpcInfo_t*>(got_tag);
 
 	if (call->status.ok()) {
 		std::cout << "Received: " << call->reply.DebugString() << std::endl;
-		call->shard->status = SHARD_STATUS_PROCESSED;
+
+		// Check if shard is already processed by someother worker
+		if ( SHARD_STATUS_PROCESSED != call->shard->status) {
+			call->shard->status = SHARD_STATUS_PROCESSED;
+
+			// TODO: Do we need to Store MapReply info somewhere that will be used for further Reduce phase???
+		}
+
+		call->worker->state = STATE_IDLE;
+
+		// Once we're complete, deallocate the call object.
+		delete call;
+
 	} else {
 
 		std::cout << "ERROR: RPC failed*****: " << call->status.error_code() << ": " << call->status.error_message()
 				  << std::endl;
 
 		call->shard->status = SHARD_STATUS_FAILED;
-	}
-	call->worker->state = STATE_IDLE;
+		call->worker->state = STATE_FAILED;
 
-	// Once we're complete, deallocate the call object.
-	delete call;
+		// TODO: memory-leak on "call" in the Non-OK status case??? Need to add cancellation logic at client side.
+	}
 
 }
 
@@ -281,27 +291,21 @@ void Master::handleReduceResponse()
 		std::cout << "Received: " << call->reply.DebugString() << std::endl;
 
 		*(call->reduce_job) = REDUCE_JOB_COMPLETE;
+		call->worker->state = STATE_IDLE;
+
+		// Once we're complete, deallocate the call object.
+		delete call;
+
 	} else {
 
-		std::cout << "ERROR: RPC failed*****: " << call->status.error_code() << ": " << call->status.error_message()
+		std::cout << "ERROR: " << __func__  << ": RPC failed*****: " << call->status.error_code() << ": " << call->status.error_message()
 				  << std::endl;
 		*(call->reduce_job) = REDUCE_JOB_FAILED;
-	}
-	call->worker->state = STATE_IDLE;
+		call->worker->state = STATE_FAILED;
 
-	// Once we're complete, deallocate the call object.
-	delete call;
-
-}
-
-
-/*
-void Master::emptyQueue(CompletionQueue & cq, vector<AsyncGrpcInfo_t> &rpcRequests) {
-	while (cq_size > 0) {
-		handleResponse(cq, rpcRequests);
+		// TODO: memory-leak on "call" in the Non-OK status case??? Need to add cancellation logic at client side.
 	}
 }
-*/
 
 
 void Master::getWorkersStatus()
@@ -328,6 +332,12 @@ void Master::mapShard( FileShard & s, Worker & w )
 	WorkerServiceClient* clientObj = getWorkerServiceClient(w.ip);
 
 	AsyncGrpcInfo_t *info = new AsyncGrpcInfo_t;
+
+	w.state = STATE_WORKING;
+	w.role = ROLE_MAPPER;
+	s.status = SHARD_STATUS_MAPPING_IN_PROGRESS;
+	s.map_begin_time = steady_clock::now();
+
 	info->worker = &w;
 	info->shard = &s;
 
@@ -369,15 +379,29 @@ void Master::doShardMapping()
 				// Map this shard to available worker:
 				for (Worker & w: mr_spec_.workers) {
 					if (STATE_IDLE == w.state) {
-						w.state = STATE_WORKING;
-						w.role = ROLE_MAPPER;
-						s.status = SHARD_STATUS_MAPPING_IN_PROGRESS;
 						mapShard( s, w);
 						break;
 					}
 				}
 			} else if (SHARD_STATUS_MAPPING_IN_PROGRESS == s.status) {
 				allShardsMappingDone = false;
+
+				/* TODO: Do we need this???
+				steady_clock::time_point current_time = steady_clock::now();
+				auto elapsed_time_in_seconds = ((duration_cast<microseconds>(current_time - s.map_begin_time).count()) / MICRO_SECONDS);
+
+				// If a shard-mapping is slow then schedule on different worker
+				if (elapsed_time_in_seconds > MESSAGE_TIMEOUT_IN_SECONDS) {
+					cout << "SLOW worker. Rescheduling shard (%d) to new mapper " << s.number << endl;
+					for (Worker & w: mr_spec_.workers) {
+						if (STATE_IDLE == w.state) {
+							mapShard( s, w);
+							break;
+						}
+					}
+				}
+				*/
+
 			}
 		}
 
@@ -472,7 +496,13 @@ bool Master::run() {
 		switch (mr_state_) {
 			case MASTER_STATE_INIT:
 			{
-				getWorkersStatus();
+				//getWorkersStatus();
+
+				// TODO: Change getWorkersStatus() to Async call. Slow worker can stall everything with synchronous call.
+				for (Worker & w: mr_spec_.workers) {
+					w.state = STATE_IDLE;
+					w.role = ROLE_MAPPER;
+				}
 
 				// Done with this state, move next
 				mr_state_ = MASTER_STATE_MAPPING;
@@ -520,10 +550,10 @@ bool Master::run() {
 			break;
 
 			default:
+				return false;
 				break;
 
 		}
-		sleep(1);	// TODO: Do we need this?
 	}
 
 	return false;

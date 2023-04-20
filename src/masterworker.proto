@@ -157,17 +157,4 @@ service WorkerService {
     rpc ExecuteCommand(WorkerCommand) returns (WorkerReply) {}
 }
 
-/*
-message WorkerTask {
-    bool task_is_map = 1
-    
-    FileShard shard = 2
-    ReduceStruct {maper_count,
-                  int reducer_number
-                  string intermediate_file_locations
-                  string output_foler_location
-                 } = 3
-}
-*/
-
 
