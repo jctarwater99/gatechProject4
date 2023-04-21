@@ -12,6 +12,10 @@
 
 #include "masterworker.grpc.pb.h"
 
+#include "threadpool.h"
+#include "circular_buffer.h"
+
+
 // #include <filesystem>
 // namespace fs = std::filesystem;
 
@@ -88,11 +92,15 @@ class Worker {
 
 		~Worker();
 
+		void handleCommand( CallData* msg);
 		void handleGetStatusRequest( CallData *msg);
 		void handleStopWorkerRequest( CallData *msg);
 		void handleMapRequest( CallData *msg);
 		void handleReduceRequest( CallData *msg);
 
+		bool createThreadPool( uint8_t t_count );
+		void enqueRequest( void* req_data);
+		void* dequeRequest();
 
 	private:
 		/* NOW you can add below, data members and member functions as per the need of your implementation*/
@@ -104,6 +112,9 @@ class Worker {
         std::unique_ptr<ServerCompletionQueue> cq_;
         WorkerService::AsyncService service_;
         std::unique_ptr<Server> server_;
+
+		ThreadPool *thread_pool_;
+		CircularBuffer circ_buff_;
 
 };
 

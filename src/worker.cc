@@ -1,6 +1,9 @@
 
 #include "worker.h"
 
+// Global param
+bool stop_execution = false;
+
 
 /* CS6210_TASK: ip_addr_port is the only information you get when started.
 	You can populate your other class data members here if you want */
@@ -12,6 +15,8 @@ Worker::Worker(std::string ip_addr_port) {
 	state_ = STATE_IDLE;
 	work_status_ = WORK_INVALID;
 	role_ = ROLE_NONE;
+
+    createThreadPool(1);        // Create one background thread
 }
 
 
@@ -63,7 +68,7 @@ bool Worker::run() {
 
 
 	// Handle RPCs
-	while (1) {
+	while (!stop_execution) {
 
         // Spawn a new CallData instance to serve new clients.
         CallData *newReq = new CallData( *this, &service_, cq_.get());
@@ -83,10 +88,22 @@ bool Worker::run() {
         GPR_ASSERT(cq_->Next(&tag, &ok));
         //GPR_ASSERT(ok);  // It can be false also in case of cancellation, so comment assert
 
-		msg = static_cast<CallData*>(tag);
+        // Dispatch client-request to worker-thread
+        enqueRequest(tag);
+
+	}
+
+	return false;
+}
+
+
+void Worker::handleCommand( CallData* msg )
+{
+    if (msg) {
+
 		WorkerCommand *cmd_received = msg->getWorkerCommand();
 		CommandType cmd_type = cmd_received->cmd_type();
-		std::cout << "Ok value: " << ok <<  ", Worker Received Command : " << cmd_received->DebugString() << std::endl;
+		cout << "Worker Received Command : " << cmd_received->DebugString() << std::endl;
 
 		switch (cmd_type) {
 
@@ -118,17 +135,57 @@ bool Worker::run() {
 			{
 				// Stop worker execution
 				handleStopWorkerRequest( msg);
-				return true;
+                stop_execution = true;
 			}
 			break;
 
 			default:
-				return true;
 				break;
-		}
-	}
 
-	return false;
+		}
+    } else {
+        cout << "ERROR: Worker::handleCommand(): Invalid message" << endl;
+    }
+}
+
+
+static void request_handler(int idx, void* param )
+{
+	Worker* worker = static_cast<Worker*>(param);
+    CallData* msg = nullptr;
+
+	while(!stop_execution) {
+
+        msg = static_cast<CallData*>(worker->dequeRequest());
+        worker->handleCommand( msg);
+    }
+
+    return;
+}
+
+
+bool Worker::createThreadPool( uint8_t t_count)
+{
+    bool ret_val = false;
+
+    if (thread_pool_ == nullptr) {
+        thread_pool_ = new ThreadPool( t_count, request_handler, this);
+        ret_val = true;
+    }
+
+    return ret_val;
+}
+
+
+void Worker::enqueRequest( void* req_data)
+{
+    circ_buff_.insert( req_data);
+}
+
+
+void* Worker::dequeRequest()
+{
+    return circ_buff_.remove();
 }
 
 
