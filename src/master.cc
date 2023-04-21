@@ -1,5 +1,8 @@
 #include "master.h"
-
+#include <iostream>
+#include <fstream>
+#include <cstdio>
+#include <cstring>
 
 static constexpr int MESSAGE_TIMEOUT_IN_SECONDS = 5;
 static constexpr float MICRO_SECONDS = 1000000.0;
@@ -12,7 +15,9 @@ WorkerServiceClient::WorkerServiceClient(shared_ptr<Channel> channel, string w_i
 
 void WorkerServiceClient::setMessageTimeDeadline( ClientContext & context )
 {
-	// Set message time deadline:
+	// Set message time deadline:#include <iostream>
+#include <fstream>
+#include <cstdio>
     time_point<system_clock> now_point = system_clock::now();
 	auto deadline = now_point  + seconds(MESSAGE_TIMEOUT_IN_SECONDS);
 
@@ -423,6 +428,16 @@ bool Master::run() {
 						cout << "Stop-Worker Reply: " << reply.DebugString() << endl;
 					} else {
 						cout << "ERROR: sendStopWorkerCommand reply failed for address: " << w.ip << endl;
+					}
+				}
+
+				for (int i = 0; i < file_shards_.size(); i++) {
+					for (int j = 0; j < mr_spec_.n_output_files; j++) {
+						string filename = "intermediate_m" + to_string(i) + "_r" + to_string(j)+ ".txt";
+						char* filename_c = new char[filename.length() + 1];
+						strcpy(filename_c, filename.c_str());
+						std::remove(filename_c);
+						delete[] filename_c;
 					}
 				}
 

@@ -5,7 +5,9 @@
 #include <fstream>
 #include <vector>
 #include <sstream>
-
+#include <sys/stat.h>
+#include <unistd.h>
+#include <cstring>
 #include "masterworker.grpc.pb.h"
 
 using namespace std;
@@ -100,6 +102,13 @@ inline bool validate_mr_spec(const MapReduceSpec& mr_spec) {
 			return false;
 		}
 	} 
+	char* char_arr = new char[mr_spec.output_dir.length() + 1];
+	strcpy(char_arr, mr_spec.output_dir.c_str());
+	struct stat sb;
+	if (stat(char_arr, &sb) != 0 || (sb.st_mode & S_IFDIR)) {
+		mkdir(char_arr, 0700);
+	}
+	delete[] char_arr;
 
 	return true;
 }

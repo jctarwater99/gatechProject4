@@ -340,13 +340,12 @@ void Worker::handleReduceRequest( CallData *msg)
 	state_ = STATE_WORKING;
 	role_ = ROLE_REDUCER;
 
-
-	// Perform Mapping function
 	bool failed = false;
 	auto reducer = get_reducer_from_task_factory(reduce_cmd.user_id()); 
 
 	vector<pair<string, string> > temp_pairs;
 
+	// Get Data from Intermediate Files
 	for (int i = 0; i < reduce_cmd.n_intermediate_files(); i++) {
 		string line;
 		ifstream file("intermediate_m" + to_string(i) + "_r" + to_string(reduce_cmd.reducer_num()) + ".txt");
@@ -365,6 +364,7 @@ void Worker::handleReduceRequest( CallData *msg)
 
 	sort(temp_pairs.begin(), temp_pairs.end());
 
+	// Perform Reducing
 	string previous;
 	vector<string> values;
 	vector<pair<string, string> >::iterator it;
@@ -379,13 +379,15 @@ void Worker::handleReduceRequest( CallData *msg)
 			values.push_back((*it).second);
 		}
 	}
+	reducer->reduce(previous, values);
+	values.clear();
 	temp_pairs.clear();
 
 	// Save to output file
 	vector<pair<string, string> >& pairs = reducer->impl_->key_value_pairs;
 	sort(pairs.begin(), pairs.end());
 	vector<ofstream> files;
-	std::ofstream file("output_"+ to_string(reduce_cmd.reducer_num()) + ".txt"); // TODO: Fix folder
+	std::ofstream file(reduce_cmd.output_dir() + "/output_"+ to_string(reduce_cmd.reducer_num()) + ".txt"); // TODO: Fix folder
 	if (!file.is_open()) {
 		failed = true;
 	}
