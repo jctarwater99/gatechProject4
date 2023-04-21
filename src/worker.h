@@ -92,6 +92,7 @@ class Worker {
 
 		~Worker();
 
+		void handleRequest( void* tag);
 		void handleCommand( CallData* msg);
 		void handleGetStatusRequest( CallData *msg);
 		void handleStopWorkerRequest( CallData *msg);

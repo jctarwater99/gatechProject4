@@ -88,12 +88,49 @@ bool Worker::run() {
         GPR_ASSERT(cq_->Next(&tag, &ok));
         //GPR_ASSERT(ok);  // It can be false also in case of cancellation, so comment assert
 
-        // Dispatch client-request to worker-thread
-        enqueRequest(tag);
-
+		handleRequest(tag);
 	}
 
 	return false;
+}
+
+
+void Worker::handleRequest( void* tag)
+{
+	CallData *msg = nullptr;
+	msg = static_cast<CallData*>(tag);
+
+    if (msg) {
+
+		WorkerCommand *cmd_received = msg->getWorkerCommand();
+		CommandType cmd_type = cmd_received->cmd_type();
+		cout << "Worker Received Command : " << cmd_type << std::endl;
+
+		switch (cmd_type) {
+
+			// Move heavy tasks to bacground thread
+			case CMD_TYPE_MAP:
+			case CMD_TYPE_REDUCE:
+			case CMD_TYPE_STOP_WORKER:
+			{
+				enqueRequest(tag);
+			}
+			break;
+
+			// Reply ping requests quickly
+			case CMD_TYPE_STATUS:
+			{
+				handleGetStatusRequest( msg);
+			}
+			break;
+
+			default:
+				break;
+
+		}
+    } else {
+        cout << "ERROR: Worker::handleRequest(): Invalid message" << endl;
+    }
 }
 
 
@@ -103,7 +140,7 @@ void Worker::handleCommand( CallData* msg )
 
 		WorkerCommand *cmd_received = msg->getWorkerCommand();
 		CommandType cmd_type = cmd_received->cmd_type();
-		cout << "Worker Received Command : " << cmd_received->DebugString() << std::endl;
+		cout << "handleCommand() : " << cmd_received->DebugString() << std::endl;
 
 		switch (cmd_type) {
 
@@ -122,12 +159,6 @@ void Worker::handleCommand( CallData* msg )
 			case CMD_TYPE_REDUCE:
 			{
 				handleReduceRequest(msg);
-			}
-			break;
-
-			case CMD_TYPE_STATUS:
-			{
-				handleGetStatusRequest( msg);
 			}
 			break;
 
@@ -201,7 +232,6 @@ void Worker::handleGetStatusRequest( CallData *msg)
 	status_reply->set_worker_state( state_);
 	status_reply->set_work_status( work_status_);
 	status_reply->set_worker_role( role_);
-	cout << reply->DebugString() << endl;
 
 	msg->proceed();
 	cout << "CMD_TYPE_STATUS: Sent Reply " << endl;
@@ -292,7 +322,7 @@ void Worker::handleMapRequest( CallData *msg)
 			r->add_filenames("intermediate_m" + to_string(map_cmd.shard_info().number()) + "_r" + to_string(i) + ".txt");
 		}
 	}
-		
+
 	msg->proceed();
 	cout << "CMD_TYPE_MAP: Sent Reply " << endl;
 
@@ -381,7 +411,7 @@ void Worker::handleReduceRequest( CallData *msg)
 		// 	r->add_filenames("i_" + ip_addr_port_ + "_m" + to_string(map_cmd.shard_info().number()) + "_r" + to_string(i));
 		// }
 	}
-		
+
 	msg->proceed();
 	cout << "CMD_TYPE_REDUCE: Sent Reply " << endl;
 
