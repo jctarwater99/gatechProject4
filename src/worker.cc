@@ -376,11 +376,12 @@ void Worker::handleReduceRequest( CallData *msg)
 	sort(temp_pairs.begin(), temp_pairs.end());
 
 	// Perform Reducing
-	string previous;
+	string previous = "";
 	vector<string> values;
 	vector<pair<string, string> >::iterator it;
+
 	for (it = temp_pairs.begin(); it != temp_pairs.end(); it++) {
-		if (previous.compare("") == 0 || (*it).first.compare(previous) == 0) {
+		if (previous == "" || (*it).first == previous) {
 			values.push_back((*it).second);
 			previous = (*it).first;
 		} else {
