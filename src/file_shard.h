@@ -16,6 +16,7 @@ struct FileShard {
      int number;
      ShardStatus status;
 	 steady_clock::time_point map_begin_time;
+	 string worker_id;
      vector<struct FileSegment> segments;
 };
 

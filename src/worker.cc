@@ -8,7 +8,7 @@ bool stop_execution = false;
 /* CS6210_TASK: ip_addr_port is the only information you get when started.
 	You can populate your other class data members here if you want */
 Worker::Worker(std::string ip_addr_port) {
-	std::cout << "ip_addr_port: " << ip_addr_port << std::endl;
+	//std::cout << "ip_addr_port: " << ip_addr_port << std::endl;
 	ip_addr_port_ = ip_addr_port;
 	requests_handled_ = 0;
 
@@ -64,7 +64,7 @@ bool Worker::run() {
     cq_ = builder.AddCompletionQueue();
     // Finally assemble the server.
     server_ = builder.BuildAndStart();
-    std::cout << "Worker listening on " << ip_addr_port_ << std::endl;
+    //std::cout << "Worker listening on " << ip_addr_port_ << std::endl;
 
 
 	// Handle RPCs
@@ -104,7 +104,7 @@ void Worker::handleRequest( void* tag)
 
 		WorkerCommand *cmd_received = msg->getWorkerCommand();
 		CommandType cmd_type = cmd_received->cmd_type();
-		cout << "Worker Received Command : " << cmd_type << std::endl;
+		//cout << "Worker Received Command : " << cmd_type << std::endl;
 
 		switch (cmd_type) {
 
@@ -129,7 +129,7 @@ void Worker::handleRequest( void* tag)
 
 		}
     } else {
-        cout << "ERROR: Worker::handleRequest(): Invalid message" << endl;
+        cerr << "ERROR: Worker::handleRequest(): Invalid message" << endl;
     }
 }
 
@@ -140,17 +140,19 @@ void Worker::handleCommand( CallData* msg )
 
 		WorkerCommand *cmd_received = msg->getWorkerCommand();
 		CommandType cmd_type = cmd_received->cmd_type();
-		cout << "handleCommand() : " << cmd_received->DebugString() << std::endl;
+		//cout << "handleCommand() : " << cmd_received->DebugString() << std::endl;
 
 		switch (cmd_type) {
 
 			case CMD_TYPE_MAP:
 			{
+				/*
 				// TODO: Remove this delay after testing is done.
 				// Test delay from one worker
 				if (ip_addr_port_ == "localhost:50051") {
 					sleep(20);
 				}
+				*/
 
 				handleMapRequest(msg);
 			}
@@ -175,7 +177,7 @@ void Worker::handleCommand( CallData* msg )
 
 		}
     } else {
-        cout << "ERROR: Worker::handleCommand(): Invalid message" << endl;
+        cerr << "ERROR: Worker::handleCommand(): Invalid message" << endl;
     }
 }
 
@@ -234,7 +236,7 @@ void Worker::handleGetStatusRequest( CallData *msg)
 	status_reply->set_worker_role( role_);
 
 	msg->proceed();
-	cout << "CMD_TYPE_STATUS: Sent Reply " << endl;
+	//cout << "CMD_TYPE_STATUS: Sent Reply " << endl;
 }
 
 void Worker::handleStopWorkerRequest( CallData *msg)
@@ -246,7 +248,7 @@ void Worker::handleStopWorkerRequest( CallData *msg)
 	reply->set_cmd_status( CMD_STATUS_SUCCESS);
 
 	msg->proceed();
-	cout << "CMD_TYPE_STOP_WORKER: Sent Reply " << endl;
+	//cout << "CMD_TYPE_STOP_WORKER: Sent Reply " << endl;
 }
 
 
@@ -324,7 +326,7 @@ void Worker::handleMapRequest( CallData *msg)
 	}
 
 	msg->proceed();
-	cout << "CMD_TYPE_MAP: Sent Reply " << endl;
+	//cout << "CMD_TYPE_MAP: Sent Reply " << endl;
 
 	state_ = STATE_IDLE;
 	role_ = ROLE_NONE;
@@ -415,7 +417,7 @@ void Worker::handleReduceRequest( CallData *msg)
 	}
 
 	msg->proceed();
-	cout << "CMD_TYPE_REDUCE: Sent Reply " << endl;
+	//cout << "CMD_TYPE_REDUCE: Sent Reply " << endl;
 
 	state_ = STATE_IDLE;
 	role_ = ROLE_NONE;
@@ -462,7 +464,7 @@ void CallData::proceed() {
         responder_.Finish(reply_, retStatus, this);
 
     } else {
-		cout << "CallData: FINISH call, deleteing myself" << endl;
+		//cout << "CallData: FINISH call, deleteing myself" << endl;
         GPR_ASSERT(status_ == FINISH);
         // Once in the FINISH state, deallocate ourselves (CallData).
         delete this;

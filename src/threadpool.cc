@@ -15,7 +15,7 @@ ThreadPool::ThreadPool (uint8_t t_count, func_ptr fn, void* buff_ctx): thread_co
         threads_.push_back(thread_ptr(new std::thread(thread_fn_, i, buff_ctx)));
     }
 
-    std::cout << "ThreadPool::start(): threads_.size(): " << threads_.size() << std::endl;
+    //std::cout << "ThreadPool::start(): threads_.size(): " << threads_.size() << std::endl;
 }
 
 

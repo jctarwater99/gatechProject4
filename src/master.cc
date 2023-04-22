@@ -4,7 +4,7 @@
 #include <cstdio>
 #include <cstring>
 
-static constexpr int MESSAGE_TIMEOUT_IN_SECONDS = 5;
+static constexpr int MESSAGE_TIMEOUT_IN_SECONDS = 1000;
 static constexpr float MICRO_SECONDS = 1000000.0;
 
 
@@ -37,7 +37,7 @@ bool WorkerServiceClient::executeCommand( WorkerCommand & wrk_cmd, WorkerReply &
 	Status status = stub_->ExecuteCommand(&context, wrk_cmd, &reply);
 
 	if (!status.ok()) {
-		std::cout << status.error_code() << ": " << status.error_message()
+		std::cerr << status.error_code() << ": " << status.error_message()
 				  << std::endl;
 		return false;
 	}
@@ -127,7 +127,7 @@ WorkerServiceClient* Master::getWorkerServiceClient(string ip)
 
 void Master::handleMapResponse()
 {
-	cout << "handleResponse() ..waiting" << endl;
+	//cout << "handleResponse() ..waiting" << endl;
 
 	void* got_tag;
     bool ok = false;
@@ -136,7 +136,7 @@ void Master::handleMapResponse()
 	AsyncGrpcInfo_t* call = static_cast<AsyncGrpcInfo_t*>(got_tag);
 
 	if (call->status.ok()) {
-		std::cout << "Received: " << call->reply.DebugString() << std::endl;
+		//std::cout << "Received: " << call->reply.DebugString() << std::endl;
 
 		// Check if shard is already processed by someother worker
 		if ( SHARD_STATUS_PROCESSED != call->shard->status) {
@@ -152,7 +152,7 @@ void Master::handleMapResponse()
 
 	} else {
 
-		std::cout << "ERROR: RPC failed*****: " << call->status.error_code() << ": " << call->status.error_message()
+		std::cerr << "ERROR: RPC failed*****: " << call->status.error_code() << ": " << call->status.error_message()
 				  << std::endl;
 
 		call->shard->status = SHARD_STATUS_FAILED;
@@ -165,7 +165,7 @@ void Master::handleMapResponse()
 
 void Master::handleReduceResponse()
 {
-	cout << "handleResponse() ..waiting" << endl;
+	//cout << "handleResponse() ..waiting" << endl;
 
 	void* got_tag;
     bool ok = false;
@@ -175,7 +175,7 @@ void Master::handleReduceResponse()
 	AsyncGrpcInfo_t* call = static_cast<AsyncGrpcInfo_t*>(got_tag);
 
 	if (call->status.ok()) {
-		std::cout << "Received: " << call->reply.DebugString() << std::endl;
+		//std::cout << "Received: " << call->reply.DebugString() << std::endl;
 
 		*(call->reduce_job) = REDUCE_JOB_COMPLETE;
 		call->worker->state = STATE_IDLE;
@@ -185,7 +185,7 @@ void Master::handleReduceResponse()
 
 	} else {
 
-		std::cout << "ERROR: " << __func__  << ": RPC failed*****: " << call->status.error_code() << ": " << call->status.error_message()
+		std::cerr << "ERROR: " << __func__  << ": RPC failed*****: " << call->status.error_code() << ": " << call->status.error_message()
 				  << std::endl;
 		*(call->reduce_job) = REDUCE_JOB_FAILED;
 		call->worker->state = STATE_FAILED;
@@ -198,17 +198,17 @@ void Master::handleReduceResponse()
 void Master::getWorkersStatus()
 {
 	// Query all workers about their status to know about available workers
-	cout << "sending getStatus command to workers" << endl;
+	//cout << "sending getStatus command to workers" << endl;
 
 	for (Worker & w: mr_spec_.workers) {
 		WorkerReply reply;
 		WorkerServiceClient* clientObj = getWorkerServiceClient(w.ip);
 		if (clientObj->getWorkerStatus(reply) == true) {
-			cout << "Status Reply: " << reply.DebugString() << endl;
+			//cout << "Status Reply: " << reply.DebugString() << endl;
 			w.state = reply.status_reply().worker_state();
 			w.role = reply.status_reply().worker_role();
 		} else {
-			cout << "ERROR: getWorkerStatus reply failed for address: " << w.ip << endl;
+			cerr << "ERROR: getWorkerStatus reply failed for address: " << w.ip << endl;
 		}
 	}
 }
@@ -216,6 +216,7 @@ void Master::getWorkersStatus()
 
 void Master::mapShard( FileShard & s, Worker & w )
 {
+	//cout << "mapShard(): shard_number: " << s.number << ", worker: " << w.ip << endl;
 	WorkerServiceClient* clientObj = getWorkerServiceClient(w.ip);
 
 	AsyncGrpcInfo_t *info = new AsyncGrpcInfo_t;
@@ -224,6 +225,7 @@ void Master::mapShard( FileShard & s, Worker & w )
 	w.role = ROLE_MAPPER;
 	s.status = SHARD_STATUS_MAPPING_IN_PROGRESS;
 	s.map_begin_time = steady_clock::now();
+	s.worker_id = w.ip;
 
 	info->worker = &w;
 	info->shard = &s;
@@ -263,6 +265,11 @@ void Master::doShardMapping()
 		for ( FileShard & s : file_shards_ ) {
 			if ((SHARD_STATUS_INIT == s.status) || (SHARD_STATUS_FAILED == s.status)) {
 				allShardsMappingDone = false;
+
+				if (SHARD_STATUS_FAILED == s.status) {
+					cerr << "Moving Failed shard ( number: " << s.number << ", prev worker: " << s.worker_id << ") to next available worker >>>>>-----" << endl;
+				}
+
 				// Map this shard to available worker:
 				for (Worker & w: mr_spec_.workers) {
 					if (STATE_IDLE == w.state) {
@@ -378,7 +385,7 @@ bool Master::run() {
 	// Run reduce on all reduce "objects"
 
 	while (1) {
-		cout << "Current state: " << mr_state_ << endl;
+		//cout << "Current state: " << mr_state_ << endl;
 
 		switch (mr_state_) {
 			case MASTER_STATE_INIT:
@@ -420,14 +427,12 @@ bool Master::run() {
 			{
 
 				// Stop all workers
-				cout << "sending Stop-Worker command:" << endl;
+				//cout << "sending Stop-Worker command:" << endl;
 				for (Worker w: mr_spec_.workers) {
 					WorkerReply reply;
 					WorkerServiceClient* clientObj = getWorkerServiceClient(w.ip);
-					if (clientObj->sendStopWorkerCommand(reply) == true) {
-						cout << "Stop-Worker Reply: " << reply.DebugString() << endl;
-					} else {
-						cout << "ERROR: sendStopWorkerCommand reply failed for address: " << w.ip << endl;
+					if (clientObj->sendStopWorkerCommand(reply) == false) {
+						cerr << "ERROR: sendStopWorkerCommand reply failed for address: " << w.ip << endl;
 					}
 				}
 
