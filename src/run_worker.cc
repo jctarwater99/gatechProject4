@@ -11,6 +11,13 @@ int main(int argc, char** argv) {
 			return EXIT_FAILURE;
 		}
 
+		// bool fail = false;
+		// if (argc == 3) {
+		// 	fail = true;
+		// }
+		// ip_addr_port = std::string(argv[1]);
+
 	Worker worker(ip_addr_port);
+	// worker.setFail(fail);
 	return worker.run() ? EXIT_SUCCESS : EXIT_FAILURE;
 }

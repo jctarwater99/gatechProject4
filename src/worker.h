@@ -91,7 +91,7 @@ class Worker {
 		bool run();
 
 		~Worker();
-
+		void setFail(bool fail);
 		void handleRequest( void* tag);
 		void handleCommand( CallData* msg);
 		void handleGetStatusRequest( CallData *msg);

@@ -4,7 +4,7 @@
 #include <cstdio>
 #include <cstring>
 
-static constexpr int MESSAGE_TIMEOUT_IN_SECONDS = 1000;
+static constexpr int MESSAGE_TIMEOUT_IN_SECONDS = 20;
 static constexpr float MICRO_SECONDS = 1000000.0;
 
 
@@ -16,8 +16,6 @@ WorkerServiceClient::WorkerServiceClient(shared_ptr<Channel> channel, string w_i
 void WorkerServiceClient::setMessageTimeDeadline( ClientContext & context )
 {
 	// Set message time deadline:#include <iostream>
-#include <fstream>
-#include <cstdio>
     time_point<system_clock> now_point = system_clock::now();
 	auto deadline = now_point  + seconds(MESSAGE_TIMEOUT_IN_SECONDS);
 
@@ -131,7 +129,11 @@ void Master::handleMapResponse()
 
 	void* got_tag;
     bool ok = false;
-    GPR_ASSERT(cq_.Next(&got_tag, &ok));
+
+	time_point<system_clock> now_point = system_clock::now();
+	auto deadline = now_point  + seconds(MESSAGE_TIMEOUT_IN_SECONDS);
+
+    GPR_ASSERT(cq_.AsyncNext(&got_tag, &ok, deadline));
 
 	AsyncGrpcInfo_t* call = static_cast<AsyncGrpcInfo_t*>(got_tag);
 

@@ -3,7 +3,7 @@
 
 // Global param
 bool stop_execution = false;
-
+bool will_fail = false;
 
 /* CS6210_TASK: ip_addr_port is the only information you get when started.
 	You can populate your other class data members here if you want */
@@ -92,6 +92,10 @@ bool Worker::run() {
 	}
 
 	return false;
+}
+
+void Worker::setFail(bool fail) {
+	will_fail = fail;
 }
 
 
@@ -254,6 +258,11 @@ void Worker::handleStopWorkerRequest( CallData *msg)
 
 void Worker::handleMapRequest( CallData *msg)
 {
+	if (will_fail) {
+		stop_execution = true;
+		return;
+	}
+
 	WorkerCommand *cmd_received = msg->getWorkerCommand();
 	WorkerReply * reply = msg->getWorkerReply();
 	MapCommand map_cmd = cmd_received->map_cmd();
