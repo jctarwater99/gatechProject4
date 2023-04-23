@@ -3,8 +3,11 @@
 #include <fstream>
 #include <cstdio>
 #include <cstring>
+#include <thread>
 
-static constexpr int MESSAGE_TIMEOUT_IN_SECONDS = 20;
+using namespace std::this_thread;
+
+static constexpr int MESSAGE_TIMEOUT_IN_SECONDS = 100;
 static constexpr float MICRO_SECONDS = 1000000.0;
 
 
@@ -363,6 +366,7 @@ void Master::doReducing()
 			} else if (reduce_job_state == REDUCE_JOB_IN_PROGRESS) { // TODO: Race condition? 
 				allReducingJobsComplete = false;
 			}
+            sleep_for(100ms);
 			i++;
 		}
 
@@ -458,6 +462,9 @@ bool Master::run() {
 				break;
 
 		}
+
+        sleep_for(1s);
+
 	}
 
 	return false;

@@ -1,5 +1,5 @@
-
-Project 4
+# cs6210Project4
+MapReduce Infrastructure
 
 
 Contributions
@@ -40,31 +40,7 @@ mr_tasks.h:
 This file in theory handles the emit keypair functions calls from the provided user map and reduce functions, but all it does is append the keypair to a vector which is later dumped to a file. 
 
 
-Difficulties
-As mentioned above, it felt difficult to just do a part of the project, as every piece is dependent on the other parts. We also had to deal with the typical core dump execution errors that are inevitable when working in c/c++, especially when we were first setting up the commnication between the workers and master. Additionally, at one point during testing, we came across a race condition that only occurs when there are many mappers and reducers, and as of yet, we have not found the problem. 
+Difficulties:
+As mentioned above, it felt difficult to just do a part of the project, as every piece is dependent on the other parts. We also had to deal with the typical core dump execution errors that are inevitable when working in c/c++, especially when we were first setting up the commnication between the workers and master. Additionally, at one point during testing, we came across a race condition that only occurs when there are many mappers and reducers. We fixed the issues by carefully organizing code, seprating worker files with unique names and flushing disk caches.
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-# cs6210Project4
-MapReduce Infrastructure
-
-## Project Instructions
-
-[Project Description](description.md)
-
-[Code walk through](structure.md)
-
-### How to setup the project  
-Same as project 3 instructions

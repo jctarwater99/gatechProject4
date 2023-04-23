@@ -317,6 +317,8 @@ void Worker::handleMapRequest( CallData *msg)
 			files[hashed_string % n_output_files] << (*it).first << " " << (*it).second << "\n";
 		}
 		// file.close(); // Called automatically when destructor is called
+        file.flush();
+        file.close();
 	}
 
 	// Return reply:
@@ -344,6 +346,7 @@ void Worker::handleMapRequest( CallData *msg)
 
 void Worker::handleReduceRequest( CallData *msg)
 {
+
 	WorkerCommand *cmd_received = msg->getWorkerCommand();
 	WorkerReply * reply = msg->getWorkerReply();
 	ReduceCommand reduce_cmd = cmd_received->reduce_cmd();
@@ -353,6 +356,7 @@ void Worker::handleReduceRequest( CallData *msg)
 
 	bool failed = false;
 	auto reducer = get_reducer_from_task_factory(reduce_cmd.user_id()); 
+    reducer->impl_->key_value_pairs.clear();
 
 	vector<pair<string, string> > temp_pairs;
 
@@ -364,6 +368,8 @@ void Worker::handleReduceRequest( CallData *msg)
 			failed = true;
 			break;
 		}
+
+        file.sync();
 		string key, value;
 		while (getline(file, line)) {
 			istringstream is_line(line);
